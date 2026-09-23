@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block pagetitle %}仪表盘 · {{ today }}{% endblock %}
+{% block content %}
+
+<div class="stat-grid">
+  <div class="stat blue"><div class="num">{{ stats.appt_today }}</div><div class="label">今日挂号（待诊 {{ stats.pending_appt }}）</div></div>
+  <div class="stat green"><div class="num">¥{{ '%.0f'|format(stats.income_today) }}</div><div class="label">今日已收金额</div></div>
+  <div class="stat orange"><div class="num">{{ stats.hos_active }}</div><div class="label">住院中</div></div>
+  <div class="stat blue"><div class="num">{{ stats.pet_total }}</div><div class="label">宠物档案总数</div></div>
+  <div class="stat green"><div class="num">{{ stats.owner_total }}</div><div class="label">宠物主总数</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>今日预约/挂号
+      <a class="btn btn-sm btn-primary" href="{{ url_for('appointments') }}">挂号登记</a>
+    </h3>
+    {% if today_appts %}
+    <table>
+      <thead><tr><th>时间</th><th>宠物</th><th>宠物主</th><th>类型</th><th>医生</th><th>状态</th></tr></thead>
+      <tbody>
+        {% for a in today_appts %}
+        <tr>
+          <td>{{ a.appt_time or '-' }}</td>
+          <td>{{ a.pet_name }} <span class="muted">({{ a.species }})</span></td>
+          <td>{{ a.owner_name }}<br><span class="muted">{{ a.owner_phone }}</span></td>
+          <td>{{ a.type }}</td>
+          <td>{{ a.doctor_name or '-' }}</td>
+          <td>
+            {% if a.status=='待诊' %}<span class="tag orange">待诊</span>
+            {% elif a.status=='就诊中' %}<span class="tag blue">就诊中</span>
+            {% elif a.status=='已完成' %}<span class="tag green">已完成</span>
+            {% elif a.status=='已取消' %}<span class="tag gray">已取消</span>
+            {% else %}<span class="tag red">{{ a.status }}</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">今日暂无挂号</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <h3>近 7 日营收（已结清）</h3>
+    <div class="bar-chart">
+      {% for d in chart_days %}
+      <div class="bar-col" title="{{ d.date }}: ¥{{ '%.0f'|format(d.amount) }}">
+        <span class="muted" style="font-size:11px">{{ '%.0f'|format(d.amount) }}</span>
+        <div class="bar" style="height: {{ d.pct }}%"></div>
+        <span class="bar-label">{{ d.date }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h3>库存预警
+      <a class="btn btn-sm" href="{{ url_for('medicines', low='1') }}">查看全部</a>
+    </h3>
+    {% if low_stocks %}
+    <table>
+      <thead><tr><th>药品</th><th>库存</th><th>预警线</th><th>操作</th></tr></thead>
+      <tbody>
+        {% for m in low_stocks %}
+        <tr>
+          <td>{{ m.name }} <span class="muted">{{ m.spec }}</span></td>
+          <td><span class="tag red">{{ m.stock }}</span></td>
+          <td>{{ m.low_stock }}</td>
+          <td class="actions"><a class="btn btn-xs btn-primary" href="{{ url_for('medicines') }}">去入库</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">库存正常，无预警</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <h3>疫苗到期提醒（30 天内）</h3>
+    {% if vaccine_alerts %}
+    <table>
+      <thead><tr><th>宠物</th><th>疫苗</th><th>应接种日</th><th>宠物主</th><th>电话</th></tr></thead>
+      <tbody>
+        {% for v in vaccine_alerts %}
+        <tr>
+          <td>{{ v.pet_name }} <span class="muted">({{ v.species }})</span></td>
+          <td>{{ v.vaccine_name }}</td>
+          <td><span class="tag orange">{{ v.next_date }}</span></td>
+          <td>{{ v.owner_name }}</td>
+          <td>{{ v.owner_phone }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">近期无到期疫苗</div>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h3>今日值班医生</h3>
+  {% if on_duty %}
+  <div class="flex">
+    {% for d in on_duty %}
+    <span class="tag blue">{{ d.name }} · {{ d.title }} · {{ d.specialty }}</span>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">今日未设置值班排班，请到「医生排班」中添加</div>
+  {% endif %}
+</div>
+
+{% endblock %}
