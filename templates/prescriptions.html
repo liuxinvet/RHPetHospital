@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block pagetitle %}处方管理{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form method="get">
+    <input type="text" name="kw" value="{{ kw }}" placeholder="搜索宠物 / 宠物主">
+    <button class="btn" type="submit">搜索</button>
+    {% if kw %}<a class="btn" href="{{ url_for('prescriptions') }}">清除</a>{% endif %}
+  </form>
+  <a class="btn btn-primary" href="{{ url_for('prescription_new') }}">+ 新建处方</a>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>处方ID</th><th>日期</th><th>宠物</th><th>宠物主</th><th>医生</th><th>金额</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for pr in prescriptions %}
+      <tr>
+        <td>#{{ pr.id }}</td>
+        <td>{{ pr.pres_date }}</td>
+        <td><a href="{{ url_for('pet_detail', pid=pr.pet_id) }}"><b>{{ pr.pet_name }}</b></a> <span class="muted">({{ pr.species }})</span></td>
+        <td>{{ pr.owner_name }}</td>
+        <td>{{ pr.doctor_name or '-' }}</td>
+        <td>¥{{ '%.2f'|format(pr.total) }}</td>
+        <td class="actions">
+          <a class="btn btn-xs" href="{{ url_for('prescription_detail', pid=pr.id) }}">详情</a>
+          <a class="btn btn-xs" href="{{ url_for('billing_new') }}?pres={{ pr.id }}">转收费</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">暂无处方</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
