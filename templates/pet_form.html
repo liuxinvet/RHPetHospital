@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>宠物主 *</label>
+        <select name="owner_id" required>
+          <option value="">-- 选择宠物主 --</option>
+          {% for o in owners %}
+          <option value="{{ o.id }}" {{ 'selected' if pet and pet.owner_id==o.id }}>{{ o.name }}（{{ o.phone }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>宠物名字 *</label>
+        <input type="text" name="name" value="{{ pet.name if pet else '' }}" required>
+      </div>
+      <div class="form-item">
+        <label>种类</label>
+        <select name="species">
+          {% for sp in ['狗','猫','兔子','仓鼠','鸟','爬宠','其他'] %}
+          <option value="{{ sp }}" {{ 'selected' if pet and pet.species==sp }}>{{ sp }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>品种</label>
+        <input type="text" name="breed" value="{{ pet.breed if pet else '' }}" placeholder="如：金毛、英短">
+      </div>
+      <div class="form-item">
+        <label>性别</label>
+        <select name="gender">
+          <option value="公" {{ 'selected' if pet and pet.gender=='公' }}>公</option>
+          <option value="母" {{ 'selected' if pet and pet.gender=='母' }}>母</option>
+        </select>
+      </div>
+      <div class="form-item">
+        <label>生日</label>
+        <input type="date" name="birthday" value="{{ pet.birthday if pet else '' }}">
+      </div>
+      <div class="form-item">
+        <label>体重（kg）</label>
+        <input type="number" name="weight" step="0.1" value="{{ pet.weight if pet else '' }}">
+      </div>
+      <div class="form-item">
+        <label>毛色</label>
+        <input type="text" name="color" value="{{ pet.color if pet else '' }}">
+      </div>
+      <div class="form-item">
+        <label>芯片号</label>
+        <input type="text" name="chip_no" value="{{ pet.chip_no if pet else '' }}">
+      </div>
+      <div class="form-item">
+        <label>绝育</label>
+        <div class="checkbox-line">
+          <input type="checkbox" name="sterilized" {{ 'checked' if pet and pet.sterilized }}>
+          <span>已绝育</span>
+        </div>
+      </div>
+      <div class="form-item full">
+        <label>过敏史</label>
+        <input type="text" name="allergy" value="{{ pet.allergy if pet else '' }}" placeholder="如：对青霉素过敏">
+      </div>
+      <div class="form-item full">
+        <label>备注</label>
+        <textarea name="remark">{{ pet.remark if pet else '' }}</textarea>
+      </div>
+    </div>
+    <div class="mt flex">
+      <button type="submit" class="btn btn-primary">保存</button>
+      <a class="btn" href="{{ url_for('pets') }}">返回列表</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
