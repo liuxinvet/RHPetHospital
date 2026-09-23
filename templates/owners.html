@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block pagetitle %}宠物主管理{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form method="get">
+    <input type="text" name="kw" value="{{ kw }}" placeholder="搜索姓名 / 电话 / 微信">
+    <button class="btn" type="submit">搜索</button>
+    {% if kw %}<a class="btn" href="{{ url_for('owners') }}">清除</a>{% endif %}
+  </form>
+  <a class="btn btn-primary" href="{{ url_for('owner_new') }}">+ 新增宠物主</a>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>ID</th><th>姓名</th><th>电话</th><th>微信</th><th>地址</th><th>宠物数</th><th>建档时间</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for o in owners %}
+      <tr>
+        <td>{{ o.id }}</td>
+        <td><a href="{{ url_for('owner_detail', oid=o.id) }}"><b>{{ o.name }}</b></a></td>
+        <td>{{ o.phone or '-' }}</td>
+        <td>{{ o.wechat or '-' }}</td>
+        <td>{{ o.address or '-' }}</td>
+        <td><span class="tag blue">{{ o.pet_count }}</span></td>
+        <td class="muted">{{ o.created_at[:10] }}</td>
+        <td class="actions">
+          <a class="btn btn-xs" href="{{ url_for('owner_detail', oid=o.id) }}">详情</a>
+          <a class="btn btn-xs" href="{{ url_for('owner_edit', oid=o.id) }}">编辑</a>
+          <form method="post" action="{{ url_for('owner_delete', oid=o.id) }}" onsubmit="return confirmSubmit('确定删除该宠物主吗？')" style="display:inline">
+            <button class="btn btn-xs btn-danger" type="submit">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty">暂无数据，点击右上角「新增宠物主」开始建档</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
