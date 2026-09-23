@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>姓名 *</label>
+        <input type="text" name="name" value="{{ owner.name if owner else '' }}" required>
+      </div>
+      <div class="form-item">
+        <label>电话</label>
+        <input type="text" name="phone" value="{{ owner.phone if owner else '' }}">
+      </div>
+      <div class="form-item">
+        <label>微信</label>
+        <input type="text" name="wechat" value="{{ owner.wechat if owner else '' }}">
+      </div>
+      <div class="form-item full">
+        <label>地址</label>
+        <input type="text" name="address" value="{{ owner.address if owner else '' }}">
+      </div>
+      <div class="form-item full">
+        <label>备注</label>
+        <textarea name="remark">{{ owner.remark if owner else '' }}</textarea>
+      </div>
+    </div>
+    <div class="mt flex">
+      <button type="submit" class="btn btn-primary">保存</button>
+      <a class="btn" href="{{ url_for('owners') }}">返回列表</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
