@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>药品名称 *</label>
+        <input type="text" name="name" value="{{ med.name if med else '' }}" required>
+      </div>
+      <div class="form-item">
+        <label>分类</label>
+        <select name="category_id">
+          <option value="">-- 未分类 --</option>
+          {% for c in cats %}
+          <option value="{{ c.id }}" {{ 'selected' if med and med.category_id==c.id }}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>规格</label>
+        <input type="text" name="spec" value="{{ med.spec if med else '' }}" placeholder="如：50mg*12片">
+      </div>
+      <div class="form-item">
+        <label>单位</label>
+        <input type="text" name="unit" value="{{ med.unit if med else '盒' }}">
+      </div>
+      <div class="form-item">
+        <label>厂商</label>
+        <input type="text" name="manufacturer" value="{{ med.manufacturer if med else '' }}">
+      </div>
+      <div class="form-item">
+        <label>进价（元）</label>
+        <input type="number" name="purchase_price" step="0.01" value="{{ med.purchase_price if med else '' }}">
+      </div>
+      <div class="form-item">
+        <label>售价（元）</label>
+        <input type="number" name="sale_price" step="0.01" value="{{ med.sale_price if med else '' }}">
+      </div>
+      <div class="form-item">
+        <label>初始库存</label>
+        <input type="number" name="stock" value="{{ med.stock if med else 0 }}" {{ 'disabled' if med }}>
+      </div>
+      <div class="form-item">
+        <label>库存预警线</label>
+        <input type="number" name="low_stock" value="{{ med.low_stock if med else 10 }}">
+      </div>
+      <div class="form-item">
+        <label>有效期</label>
+        <input type="date" name="expiry_date" value="{{ med.expiry_date if med else '' }}">
+      </div>
+      {% if med %}
+      <div class="form-item">
+        <label>状态</label>
+        <div class="checkbox-line">
+          <input type="checkbox" name="status" {{ 'checked' if med.status }}>
+          <span>在售</span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="mt flex">
+      <button type="submit" class="btn btn-primary">保存</button>
+      <a class="btn" href="{{ url_for('medicines') }}">返回列表</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
