@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block pagetitle %}医生排班{% endblock %}
+{% block content %}
+
+{% set sched_map = {} %}
+{% for s in sched %}
+  {% if s.doctor_id not in sched_map %}{% set _ = sched_map.update({s.doctor_id: {}}) %}{% endif %}
+  {% set _ = sched_map[s.doctor_id].update({s.work_date: s}) %}
+{% endfor %}
+
+<div class="grid-2">
+  <div class="card">
+    <h3>医生管理</h3>
+    <form method="post" action="{{ url_for('doctor_new') }}" class="form-inline-row">
+      <input type="text" name="name" placeholder="姓名" required style="width:110px">
+      <input type="text" name="title" placeholder="职称" style="width:120px">
+      <input type="text" name="specialty" placeholder="专长" style="width:180px">
+      <input type="text" name="phone" placeholder="电话" style="width:130px">
+      <button class="btn btn-primary">添加</button>
+    </form>
+    {% if doctors %}
+    <table>
+      <thead><tr><th>姓名</th><th>职称</th><th>专长</th><th>电话</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody>
+        {% for d in doctors %}
+        <tr>
+          <td>{{ d.name }}</td>
+          <td>{{ d.title }}</td>
+          <td>{{ d.specialty }}</td>
+          <td>{{ d.phone }}</td>
+          <td>{% if d.status %}<span class="tag green">在职</span>{% else %}<span class="tag gray">离职</span>{% endif %}</td>
+          <td class="actions">
+            <button class="btn btn-xs" onclick="var f=document.getElementById('edit-{{ d.id }}');f.style.display=f.style.display==='none'?'':'none'">编辑</button>
+          </td>
+        </tr>
+        <tr id="edit-{{ d.id }}" style="display:none">
+          <td colspan="6">
+            <form method="post" action="{{ url_for('doctor_edit', did=d.id) }}" class="form-inline-row">
+              <input type="text" name="name" value="{{ d.name }}" required style="width:110px">
+              <input type="text" name="title" value="{{ d.title }}" style="width:120px">
+              <input type="text" name="specialty" value="{{ d.specialty }}" style="width:180px">
+              <input type="text" name="phone" value="{{ d.phone }}" style="width:130px">
+              <label class="checkbox-line"><input type="checkbox" name="status" {{ 'checked' if d.status }}> 在职</label>
+              <button class="btn btn-primary btn-sm">保存</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">暂无医生，请先添加</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <h3>本周排班（{{ week[0][0] }} ~ {{ week[6][0] }}）</h3>
+    <form method="post" action="{{ url_for('schedule_new') }}" class="form-inline-row">
+      <select name="doctor_id" required>
+        <option value="">-- 医生 --</option>
+        {% for d in doctors if d.status %}
+        <option value="{{ d.id }}">{{ d.name }}</option>
+        {% endfor %}
+      </select>
+      <input type="date" name="work_date" value="{{ today }}" required>
+      <select name="shift">
+        <option>白班</option><option>夜班</option><option>休息</option>
+      </select>
+      <button class="btn btn-primary">添加排班</button>
+    </form>
+    {% if doctors %}
+    <table>
+      <thead>
+        <tr>
+          <th>医生</th>
+          {% for d, wd in week %}<th>{{ wd }}<br><span class="muted" style="font-weight:normal">{{ d[5:] }}</span></th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in doctors %}
+        <tr>
+          <td>{{ d.name }}</td>
+          {% for dt, wd in week %}
+          <td style="text-align:center">
+            {% set s = sched_map.get(d.id, {}).get(dt) %}
+            {% if s %}
+              <span class="tag {{ 'green' if s.shift=='白班' else 'orange' if s.shift=='夜班' else 'gray' }}">{{ s.shift }}</span>
+              <form method="post" action="{{ url_for('schedule_delete', sid=s.id) }}" onsubmit="return confirmSubmit('删除该排班？')">
+                <button class="btn btn-xs btn-danger" type="submit">删</button>
+              </form>
+            {% else %}<span class="muted">-</span>{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">请先添加医生</div>{% endif %}
+  </div>
+</div>
+
+{% endblock %}
