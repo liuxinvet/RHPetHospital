@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>病历日期</label>
+        <input type="date" name="record_date" value="{{ record.record_date }}">
+      </div>
+      <div class="form-item full">
+        <label>主诉</label>
+        <input type="text" name="chief_complaint" value="{{ record.chief_complaint }}">
+      </div>
+      <div class="form-item full">
+        <label>检查所见</label>
+        <textarea name="examination">{{ record.examination }}</textarea>
+      </div>
+      <div class="form-item full">
+        <label>诊断</label>
+        <input type="text" name="diagnosis" value="{{ record.diagnosis }}">
+      </div>
+      <div class="form-item full">
+        <label>治疗方案 / 医嘱</label>
+        <textarea name="treatment">{{ record.treatment }}</textarea>
+      </div>
+      <div class="form-item full">
+        <label>复诊建议</label>
+        <input type="text" name="follow_up" value="{{ record.follow_up }}">
+      </div>
+    </div>
+    <div class="mt flex">
+      <button type="submit" class="btn btn-primary">保存</button>
+      <a class="btn" href="{{ url_for('records') }}">返回列表</a>
+      <form method="post" action="{{ url_for('record_delete', rid=record.id) }}" style="display:inline"
+            onsubmit="return confirmSubmit('确定删除该病历吗？')">
+        <button class="btn btn-danger">删除病历</button>
+      </form>
+    </div>
+  </form>
+</div>
+{% endblock %}
