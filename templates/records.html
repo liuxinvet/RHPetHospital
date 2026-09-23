@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block pagetitle %}电子病历{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form method="get">
+    <input type="text" name="kw" value="{{ kw }}" placeholder="搜索宠物 / 宠物主 / 诊断">
+    <button class="btn" type="submit">搜索</button>
+    {% if kw %}<a class="btn" href="{{ url_for('records') }}">清除</a>{% endif %}
+  </form>
+  <a class="btn btn-primary" href="{{ url_for('record_new') }}">+ 新建病历</a>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>日期</th><th>宠物</th><th>宠物主</th><th>医生</th><th>主诉</th><th>诊断</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+      <tr>
+        <td>{{ r.record_date }}</td>
+        <td><a href="{{ url_for('pet_detail', pid=r.pet_id) }}"><b>{{ r.pet_name }}</b></a> <span class="muted">({{ r.species }})</span></td>
+        <td>{{ r.owner_name }}</td>
+        <td>{{ r.doctor_name or '-' }}</td>
+        <td>{{ r.chief_complaint or '-' }}</td>
+        <td>{{ r.diagnosis or '-' }}</td>
+        <td class="actions">
+          <a class="btn btn-xs" href="{{ url_for('record_edit', rid=r.id) }}">查看</a>
+          <a class="btn btn-xs btn-primary" href="{{ url_for('prescription_new', pid=r.pet_id) }}">开处方</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">暂无病历记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
