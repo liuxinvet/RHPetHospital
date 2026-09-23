@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block pagetitle %}挂号就诊{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form method="get">
+    <input type="date" name="d" value="{{ d }}">
+    <select name="status">
+      <option value="">全部状态</option>
+      {% for s in ['待诊','就诊中','已完成','已取消','爽约'] %}
+      <option value="{{ s }}" {{ 'selected' if status==s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">查询</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>挂号登记</h3>
+  <form method="post" action="{{ url_for('appointment_new') }}">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>宠物 *</label>
+        <select name="pet_id" required>
+          <option value="">-- 选择宠物 --</option>
+          {% for p in pets %}
+          <option value="{{ p.id }}">{{ p.name }}（{{ p.species }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>就诊日期 *</label>
+        <input type="date" name="appt_date" value="{{ d }}">
+      </div>
+      <div class="form-item">
+        <label>时段</label>
+        <input type="time" name="appt_time">
+      </div>
+      <div class="form-item">
+        <label>类型</label>
+        <select name="type">
+          {% for t in ['门诊','急诊','复诊','疫苗','美容','寄养'] %}
+          <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>接诊医生</label>
+        <select name="doctor_id">
+          <option value="">-- 未指定 --</option>
+          {% for doc in doctors %}
+          <option value="{{ doc.id }}">{{ doc.name }}（{{ doc.title }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>挂号费</label>
+        <input type="number" name="fee" value="{{ reg_fee }}" step="0.5" min="0">
+      </div>
+      <div class="form-item full">
+        <label>主诉症状</label>
+        <input type="text" name="symptom" placeholder="如：呕吐腹泻、精神不振、咳嗽">
+      </div>
+    </div>
+    <div class="mt"><button class="btn btn-primary" type="submit">确认挂号</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>挂号列表（{{ d }}）</h3>
+  <table>
+    <thead>
+      <tr><th>宠物</th><th>宠物主</th><th>时间</th><th>类型</th><th>医生</th><th>主诉</th><th>挂号费</th><th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for a in appts %}
+      <tr>
+        <td>
+          <a href="{{ url_for('pet_detail', pid=a.pet_id) }}"><b>{{ a.pet_name }}</b></a>
+          <span class="muted">({{ a.species }})</span>
+        </td>
+        <td>{{ a.owner_name }}<br><span class="muted">{{ a.owner_phone }}</span></td>
+        <td>{{ a.appt_time or '-' }}</td>
+        <td>{{ a.type }}</td>
+        <td>{{ a.doctor_name or '-' }}</td>
+        <td>{{ a.symptom or '-' }}</td>
+        <td>¥{{ '%.2f'|format(a.fee) }}</td>
+        <td>
+          {% if a.status=='待诊' %}<span class="tag orange">待诊</span>
+          {% elif a.status=='就诊中' %}<span class="tag blue">就诊中</span>
+          {% elif a.status=='已完成' %}<span class="tag green">已完成</span>
+          {% elif a.status=='已取消' %}<span class="tag gray">已取消</span>
+          {% else %}<span class="tag red">{{ a.status }}</span>{% endif %}
+        </td>
+        <td class="actions">
+          {% if a.status=='待诊' %}
+          <form method="post" action="{{ url_for('appointment_status', aid=a.id) }}" style="display:inline">
+            <input type="hidden" name="status" value="就诊中">
+            <button class="btn btn-xs btn-warning">开始就诊</button>
+          </form>
+          <a class="btn btn-xs btn-primary" href="{{ url_for('record_new', pid=a.pet_id, aid=a.id) }}">写病历</a>
+          {% endif %}
+          {% if a.status=='就诊中' %}
+          <form method="post" action="{{ url_for('appointment_status', aid=a.id) }}" style="display:inline">
+            <input type="hidden" name="status" value="已完成">
+            <button class="btn btn-xs btn-success">完成</button>
+          </form>
+          {% endif %}
+          {% if a.status in ['待诊','就诊中'] %}
+          <form method="post" action="{{ url_for('appointment_status', aid=a.id) }}" style="display:inline">
+            <input type="hidden" name="status" value="已取消">
+            <button class="btn btn-xs">取消</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('appointment_delete', aid=a.id) }}" style="display:inline"
+                onsubmit="return confirmSubmit('确定删除该挂号记录吗？')">
+            <button class="btn btn-xs btn-danger">删</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty">当日暂无挂号</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
