@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block pagetitle %}宠物主详情{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h3>{{ owner.name }}
+    <span>
+      <a class="btn btn-sm" href="{{ url_for('owner_edit', oid=owner.id) }}">编辑</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('pet_new') }}?owner={{ owner.id }}">+ 添加宠物</a>
+    </span>
+  </h3>
+  <dl class="detail">
+    <dt>电话</dt><dd>{{ owner.phone or '-' }}</dd>
+    <dt>微信</dt><dd>{{ owner.wechat or '-' }}</dd>
+    <dt>地址</dt><dd>{{ owner.address or '-' }}</dd>
+    <dt>建档时间</dt><dd>{{ owner.created_at }}</dd>
+    <dt>备注</dt><dd>{{ owner.remark or '-' }}</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <h3>名下宠物（{{ pets|length }}）</h3>
+  <table>
+    <thead><tr><th>名字</th><th>种类</th><th>品种</th><th>性别</th><th>生日</th><th>操作</th></tr></thead>
+    <tbody>
+      {% for p in pets %}
+      <tr>
+        <td><a href="{{ url_for('pet_detail', pid=p.id) }}"><b>{{ p.name }}</b></a></td>
+        <td>{{ p.species }}</td>
+        <td>{{ p.breed or '-' }}</td>
+        <td>{{ p.gender }}</td>
+        <td>{{ p.birthday or '-' }}</td>
+        <td class="actions"><a class="btn btn-xs" href="{{ url_for('pet_detail', pid=p.id) }}">详情</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">暂无宠物</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>最近账单</h3>
+  <table>
+    <thead><tr><th>单号</th><th>日期</th><th>金额</th><th>已收</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>
+      {% for b in bills %}
+      <tr>
+        <td>{{ b.bill_no }}</td>
+        <td>{{ b.bill_date }}</td>
+        <td>¥{{ '%.2f'|format(b.total) }}</td>
+        <td>¥{{ '%.2f'|format(b.paid) }}</td>
+        <td>
+          {% if b.status=='已结清' %}<span class="tag green">已结清</span>
+          {% elif b.status=='已退款' %}<span class="tag gray">已退款</span>
+          {% else %}<span class="tag orange">未结清</span>{% endif %}
+        </td>
+        <td class="actions"><a class="btn btn-xs" href="{{ url_for('bill_detail', bid=b.id) }}">查看</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">暂无账单</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
