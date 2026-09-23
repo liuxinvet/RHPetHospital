@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block pagetitle %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>宠物 *</label>
+        <select name="pet_id" required>
+          <option value="">-- 选择宠物 --</option>
+          {% for p in pets %}
+          <option value="{{ p.id }}" {{ 'selected' if pid|string==p.id|string }}>{{ p.name }}（{{ p.species }}）- {{ p.owner_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>接诊医生</label>
+        <select name="doctor_id">
+          <option value="">-- 未指定 --</option>
+          {% for doc in doctors %}
+          <option value="{{ doc.id }}">{{ doc.name }}（{{ doc.title }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>病历日期</label>
+        <input type="date" name="record_date" value="{{ today }}">
+      </div>
+      <div class="form-item">
+        <label>关联挂号（可选）</label>
+        <input type="number" name="appointment_id" value="{{ aid }}" placeholder="挂号ID">
+      </div>
+      <div class="form-item full">
+        <label>主诉</label>
+        <input type="text" name="chief_complaint" placeholder="如：呕吐 2 天、食欲不振">
+      </div>
+      <div class="form-item full">
+        <label>检查所见</label>
+        <textarea name="examination" placeholder="体格检查、实验室检查、影像检查等结果"></textarea>
+      </div>
+      <div class="form-item full">
+        <label>诊断</label>
+        <input type="text" name="diagnosis" placeholder="如：急性胃肠炎">
+      </div>
+      <div class="form-item full">
+        <label>治疗方案 / 医嘱</label>
+        <textarea name="treatment" placeholder="治疗措施、用药、护理要求等"></textarea>
+      </div>
+      <div class="form-item full">
+        <label>复诊建议</label>
+        <input type="text" name="follow_up" placeholder="如：3 天后复诊">
+      </div>
+    </div>
+    <div class="mt flex">
+      <button type="submit" class="btn btn-primary">保存病历</button>
+      <a class="btn" href="{{ url_for('records') }}">返回列表</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
