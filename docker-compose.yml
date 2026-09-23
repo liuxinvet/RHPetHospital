@@ -1,0 +1,10 @@
+services:
+  rh-pet-hospital:
+    build: .
+    container_name: rh-pet-hospital
+    ports:
+      - "8080:8080"
+    volumes:
+      # 数据库持久化：数据保存在本文件夹 data 目录，备份复制该目录即可
+      - ./data:/app/data
+    restart: unless-stopped
