@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block pagetitle %}处方详情{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h3>处方 #{{ pres.id }}
+    <span>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('billing_new') }}?pres={{ pres.id }}">转收费单</a>
+      <form method="post" action="{{ url_for('prescription_delete', pid=pres.id) }}" style="display:inline"
+            onsubmit="return confirmSubmit('删除后库存将回补，确定删除吗？')">
+        <button class="btn btn-sm btn-danger">删除</button>
+      </form>
+    </span>
+  </h3>
+  <dl class="detail">
+    <dt>宠物</dt><dd><a href="{{ url_for('pet_detail', pid=pres.pet_id) }}">{{ pres.pet_name }}</a>（{{ pres.species }}）</dd>
+    <dt>宠物主</dt><dd>{{ pres.owner_name }}（{{ pres.owner_phone or '-' }}）</dd>
+    <dt>开方医生</dt><dd>{{ pres.doctor_name or '-' }}</dd>
+    <dt>开方日期</dt><dd>{{ pres.pres_date }}</dd>
+    <dt>备注</dt><dd>{{ pres.remark or '-' }}</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <h3>药品明细</h3>
+  <table>
+    <thead><tr><th>药品</th><th>规格</th><th>数量</th><th>单价</th><th>用法用量</th><th>小计</th></tr></thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>{{ it.med_name }}</td>
+        <td>{{ it.spec or '-' }}</td>
+        <td>{{ it.qty }} {{ it.unit }}</td>
+        <td>¥{{ '%.2f'|format(it.price) }}</td>
+        <td>{{ it.dosage or '-' }}</td>
+        <td>¥{{ '%.2f'|format(it.subtotal) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="5" style="text-align:right"><b>合计：</b></td><td><b>¥{{ '%.2f'|format(pres.total) }}</b></td></tr>
+    </tfoot>
+  </table>
+</div>
+
+{% endblock %}
