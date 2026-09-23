@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block pagetitle %}住院详情{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h3>{{ h.hos_no }}
+    <span>
+      <a class="btn btn-sm" href="{{ url_for('hospitalizations') }}">返回列表</a>
+      {% if h.status=='住院中' %}
+      <button class="btn btn-sm btn-success" onclick="document.getElementById('discharge-form').style.display='block'">办理出院</button>
+      {% endif %}
+    </span>
+  </h3>
+  <dl class="detail">
+    <dt>宠物</dt><dd><a href="{{ url_for('pet_detail', pid=h.pet_id) }}">{{ h.pet_name }}</a>（{{ h.species }}）</dd>
+    <dt>宠物主</dt><dd>{{ h.owner_name }}（{{ h.owner_phone or '-' }}）</dd>
+    <dt>房间/笼位</dt><dd>{{ h.room or '-' }}</dd>
+    <dt>入院日期</dt><dd>{{ h.in_date }}</dd>
+    <dt>出院日期</dt><dd>{{ h.out_date or '-' }}</dd>
+    <dt>每日费用</dt><dd>¥{{ '%.2f'|format(h.daily_fee) }}/天</dd>
+    <dt>住院原因</dt><dd>{{ h.reason or '-' }}</dd>
+    <dt>状态</dt><dd>
+      {% if h.status=='住院中' %}<span class="tag red">住院中</span>
+      {% else %}<span class="tag green">已出院</span>{% endif %}
+    </dd>
+    <dt>备注</dt><dd>{{ h.remark or '-' }}</dd>
+  </dl>
+
+  {% if h.status=='住院中' %}
+  <form id="discharge-form" method="post" action="{{ url_for('hospitalization_discharge', hid=h.id) }}" style="display:none;border-top:1px solid var(--border);padding-top:12px" class="mt">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>出院日期</label>
+        <input type="date" name="out_date" value="{{ today }}">
+      </div>
+    </div>
+    <div class="mt">
+      <button class="btn btn-success" type="submit"
+              onclick="return confirmSubmit('办理出院后将按住院天数自动生成住院费收费单，确定吗？')">确认出院并结算</button>
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>护理记录</h3>
+  <form method="post" action="{{ url_for('nursing_add', hid=h.id) }}" class="mb">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>护理内容</label>
+        <input type="text" name="content" placeholder="如：输液、喂药、伤口换药">
+      </div>
+      <div class="form-item">
+        <label>体温（℃）</label>
+        <input type="number" name="temperature" step="0.1" value="38.5">
+      </div>
+      <div class="form-item">
+        <label>食欲</label>
+        <select name="appetite">
+          <option value="">--</option>
+          <option>正常</option><option>减少</option><option>废绝</option>
+        </select>
+      </div>
+      <div class="form-item">
+        <label>护理人员</label>
+        <input type="text" name="staff">
+      </div>
+    </div>
+    <div class="mt"><button class="btn btn-primary">添加护理记录</button></div>
+  </form>
+  <table>
+    <thead><tr><th>时间</th><th>护理内容</th><th>体温</th><th>食欲</th><th>人员</th></tr></thead>
+    <tbody>
+      {% for n in nursings %}
+      <tr>
+        <td>{{ n.nurse_time }}</td>
+        <td>{{ n.content or '-' }}</td>
+        <td>{{ n.temperature if n.temperature else '-' }}</td>
+        <td>{{ n.appetite or '-' }}</td>
+        <td>{{ n.staff or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">暂无护理记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
