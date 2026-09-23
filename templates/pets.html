@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block pagetitle %}宠物档案{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form method="get">
+    <input type="text" name="kw" value="{{ kw }}" placeholder="搜索宠物名 / 品种 / 宠物主 / 电话">
+    <select name="species">
+      <option value="">全部种类</option>
+      {% for s in species_list %}
+      <option value="{{ s.species }}" {{ 'selected' if species==s.species }}>{{ s.species }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">筛选</button>
+    {% if kw or species %}<a class="btn" href="{{ url_for('pets') }}">清除</a>{% endif %}
+  </form>
+  <a class="btn btn-primary" href="{{ url_for('pet_new') }}">+ 新增宠物档案</a>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>名字</th><th>种类</th><th>品种</th><th>性别</th><th>生日</th><th>体重</th><th>宠物主</th><th>电话</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for p in pets %}
+      <tr>
+        <td><a href="{{ url_for('pet_detail', pid=p.id) }}"><b>{{ p.name }}</b></a></td>
+        <td>{{ p.species }}</td>
+        <td>{{ p.breed or '-' }}</td>
+        <td>{{ p.gender }}</td>
+        <td>{{ p.birthday or '-' }}</td>
+        <td>{{ p.weight if p.weight else '-' }}{{ 'kg' if p.weight }}</td>
+        <td>{{ p.owner_name }}</td>
+        <td>{{ p.owner_phone or '-' }}</td>
+        <td class="actions">
+          <a class="btn btn-xs" href="{{ url_for('pet_detail', pid=p.id) }}">详情</a>
+          <a class="btn btn-xs" href="{{ url_for('pet_edit', pid=p.id) }}">编辑</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty">暂无宠物档案</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
