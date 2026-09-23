@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block pagetitle %}新建处方{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>宠物 *</label>
+        <select name="pet_id" id="pres-pet" required>
+          <option value="">-- 选择宠物 --</option>
+          {% for p in pets %}
+          <option value="{{ p.id }}" {{ 'selected' if pid|string==p.id|string }}>{{ p.name }}（{{ p.species }}）- {{ p.owner_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>开方医生</label>
+        <select name="doctor_id">
+          <option value="">-- 未指定 --</option>
+          {% for doc in doctors %}
+          <option value="{{ doc.id }}">{{ doc.name }}（{{ doc.title }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item full">
+        <label>备注</label>
+        <input type="text" name="remark" placeholder="备注信息">
+      </div>
+    </div>
+
+    <h3 class="section-title">药品明细 <button type="button" class="btn btn-sm" onclick="addPresRow(PRES_MEDICINES)">+ 添加一行</button></h3>
+    <table class="pres-items">
+      <thead>
+        <tr><th>药品</th><th>数量</th><th>用法用量</th><th>单价</th><th>小计</th><th></th></tr>
+      </thead>
+      <tbody id="pres-body">
+        <tr>
+          <td>
+            <select name="med_id[]" class="pres-med" style="min-width:180px" onchange="updatePresRow(this)">
+              <option value="">-- 选择药品 --</option>
+              {% for m in medicines %}
+              <option value="{{ m.id }}" data-price="{{ m.sale_price }}" data-stock="{{ m.stock }}">{{ m.name }}（库存{{ m.stock }}）</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td><input type="number" name="qty[]" value="1" min="1" style="width:70px" oninput="calcPresTotal()"></td>
+          <td><input type="text" name="dosage[]" style="min-width:140px" placeholder="每日2次每次1片"></td>
+          <td class="pres-price">0.00</td>
+          <td class="pres-sub">0.00</td>
+          <td><button type="button" class="btn btn-danger btn-xs" onclick="this.closest('tr').remove();calcPresTotal()">删</button></td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr><td colspan="4" style="text-align:right"><b>合计：</b></td><td><b id="pres-total">0.00</b></td><td></td></tr>
+      </tfoot>
+    </table>
+
+    <div class="mt flex">
+      <button type="submit" class="btn btn-primary">保存处方（自动扣减库存）</button>
+      <a class="btn" href="{{ url_for('prescriptions') }}">返回列表</a>
+    </div>
+  </form>
+</div>
+<script>
+  var PRES_MEDICINES = [
+    {% for m in medicines %}
+    { id: {{ m.id }}, name: {{ m.name|tojson }}, sale_price: {{ m.sale_price }}, stock: {{ m.stock }} },
+    {% endfor %}
+  ];
+</script>
+{% endblock %}
