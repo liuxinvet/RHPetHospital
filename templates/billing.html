@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block pagetitle %}收费管理{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form method="get">
+    <input type="date" name="d" value="{{ d }}">
+    <select name="status">
+      <option value="">全部状态</option>
+      {% for s in ['未结清','已结清','已退款'] %}
+      <option value="{{ s }}" {{ 'selected' if status==s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">查询</button>
+    {% if d or status %}<a class="btn" href="{{ url_for('billing') }}">清除</a>{% endif %}
+  </form>
+  <a class="btn btn-primary" href="{{ url_for('billing_new') }}">+ 新建收费单</a>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>单号</th><th>日期</th><th>宠物</th><th>宠物主</th><th>金额</th><th>已收</th><th>方式</th><th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for b in bills %}
+      <tr>
+        <td><a href="{{ url_for('bill_detail', bid=b.id) }}"><b>{{ b.bill_no }}</b></a></td>
+        <td>{{ b.bill_date }}</td>
+        <td>{{ b.pet_name or '-' }}</td>
+        <td>{{ b.owner_name or '-' }}</td>
+        <td>¥{{ '%.2f'|format(b.total) }}</td>
+        <td>¥{{ '%.2f'|format(b.paid) }}</td>
+        <td>{{ b.method }}</td>
+        <td>
+          {% if b.status=='已结清' %}<span class="tag green">已结清</span>
+          {% elif b.status=='已退款' %}<span class="tag gray">已退款</span>
+          {% else %}<span class="tag orange">未结清</span>{% endif %}
+        </td>
+        <td class="actions">
+          <a class="btn btn-xs" href="{{ url_for('bill_detail', bid=b.id) }}">详情</a>
+          {% if b.status=='未结清' %}
+          <a class="btn btn-xs btn-success" href="{{ url_for('bill_detail', bid=b.id) }}">收款</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty">暂无收费单</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
