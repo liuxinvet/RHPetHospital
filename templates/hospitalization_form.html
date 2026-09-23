@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block pagetitle %}办理住院{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>宠物 *</label>
+        <select name="pet_id" required>
+          <option value="">-- 选择宠物 --</option>
+          {% for p in pets %}
+          <option value="{{ p.id }}" {{ 'selected' if request.args.get('pid')|string==p.id|string }}>{{ p.name }}（{{ p.species }}）- {{ p.owner_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>房间/笼位</label>
+        <input type="text" name="room" placeholder="如：A区-01笼">
+      </div>
+      <div class="form-item">
+        <label>入院日期</label>
+        <input type="date" name="in_date" value="{{ today }}">
+      </div>
+      <div class="form-item">
+        <label>每日费用（元）</label>
+        <input type="number" name="daily_fee" step="0.01" value="50" min="0">
+      </div>
+      <div class="form-item full">
+        <label>住院原因</label>
+        <input type="text" name="reason" placeholder="如：术后观察、输液治疗">
+      </div>
+      <div class="form-item full">
+        <label>备注</label>
+        <textarea name="remark"></textarea>
+      </div>
+    </div>
+    <div class="mt flex">
+      <button type="submit" class="btn btn-primary">确认住院</button>
+      <a class="btn" href="{{ url_for('hospitalizations') }}">返回列表</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
