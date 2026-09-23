@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block pagetitle %}宠物档案详情{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h3>{{ pet.name }}
+    <span class="tag blue">{{ pet.species }}</span>
+    <span>
+      <a class="btn btn-sm" href="{{ url_for('pet_edit', pid=pet.id) }}">编辑档案</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('record_new', pid=pet.id) }}">+ 写病历</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('prescription_new', pid=pet.id) }}">+ 开处方</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('appointments') }}?d={{ today }}">挂号</a>
+      <a class="btn btn-sm" href="{{ url_for('hospitalization_new') }}?pid={{ pet.id }}">办理住院</a>
+    </span>
+  </h3>
+  <dl class="detail">
+    <dt>宠物主</dt><dd><a href="{{ url_for('owner_detail', oid=pet.owner_id) }}">{{ pet.owner_name }}</a>（{{ pet.owner_phone or '-' }}）</dd>
+    <dt>品种</dt><dd>{{ pet.breed or '-' }}</dd>
+    <dt>性别</dt><dd>{{ pet.gender }}</dd>
+    <dt>生日</dt><dd>{{ pet.birthday or '-' }}</dd>
+    <dt>体重</dt><dd>{{ pet.weight if pet.weight else '-' }}{{ 'kg' if pet.weight }}</dd>
+    <dt>毛色</dt><dd>{{ pet.color or '-' }}</dd>
+    <dt>芯片号</dt><dd>{{ pet.chip_no or '-' }}</dd>
+    <dt>绝育</dt><dd>{{ '是' if pet.sterilized else '否' }}</dd>
+    <dt>过敏史</dt><dd>{{ pet.allergy or '无' }}</dd>
+    <dt>备注</dt><dd>{{ pet.remark or '-' }}</dd>
+  </dl>
+</div>
+
+<!-- 病历记录 -->
+<div class="card">
+  <h3>病历记录（{{ records|length }}）</h3>
+  <table>
+    <thead><tr><th>日期</th><th>医生</th><th>主诉</th><th>诊断</th><th>操作</th></tr></thead>
+    <tbody>
+      {% for r in records %}
+      <tr>
+        <td>{{ r.record_date }}</td>
+        <td>{{ r.doctor_name or '-' }}</td>
+        <td>{{ r.chief_complaint or '-' }}</td>
+        <td>{{ r.diagnosis or '-' }}</td>
+        <td class="actions"><a class="btn btn-xs" href="{{ url_for('record_edit', rid=r.id) }}">查看/编辑</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">暂无病历</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- 处方 -->
+<div class="card">
+  <h3>处方记录（{{ prescriptions|length }}）</h3>
+  <table>
+    <thead><tr><th>日期</th><th>医生</th><th>金额</th><th>操作</th></tr></thead>
+    <tbody>
+      {% for pr in prescriptions %}
+      <tr>
+        <td>{{ pr.pres_date }}</td>
+        <td>{{ pr.doctor_name or '-' }}</td>
+        <td>¥{{ '%.2f'|format(pr.total) }}</td>
+        <td class="actions"><a class="btn btn-xs" href="{{ url_for('prescription_detail', pid=pr.id) }}">查看</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">暂无处方</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- 疫苗记录 -->
+<div class="card">
+  <h3>疫苗/免疫记录
+    <a class="btn btn-sm btn-primary" href="#vaccine-form">+ 添加</a>
+  </h3>
+  <table>
+    <thead><tr><th>疫苗</th><th>针次</th><th>接种日期</th><th>下次接种</th><th>医生</th><th>备注</th></tr></thead>
+    <tbody>
+      {% for v in vaccines %}
+      <tr>
+        <td>{{ v.vaccine_name }}</td>
+        <td>第 {{ v.dose }} 针</td>
+        <td>{{ v.vaccine_date }}</td>
+        <td>
+          {% if v.next_date %}
+            {% if v.next_date < today %}<span class="tag red">已过期 {{ v.next_date }}</span>
+            {% else %}<span class="tag orange">{{ v.next_date }}</span>{% endif %}
+          {% else %}-{% endif %}
+        </td>
+        <td>{{ v.doctor_name or '-' }}</td>
+        <td>{{ v.remark or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">暂无疫苗记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <form class="mt" id="vaccine-form" method="post" action="{{ url_for('vaccine_new') }}" style="border-top:1px solid var(--border);padding-top:12px">
+    <input type="hidden" name="pet_id" value="{{ pet.id }}">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>疫苗名称 *</label>
+        <input type="text" name="vaccine_name" required placeholder="如：犬四联、狂犬、猫三联">
+      </div>
+      <div class="form-item">
+        <label>针次</label>
+        <input type="number" name="dose" value="1" min="1">
+      </div>
+      <div class="form-item">
+        <label>接种日期</label>
+        <input type="date" name="vaccine_date" value="{{ today }}">
+      </div>
+      <div class="form-item">
+        <label>下次接种日期</label>
+        <input type="date" name="next_date">
+      </div>
+      <div class="form-item">
+        <label>接种医生</label>
+        <select name="doctor_id">
+          <option value="">-- 未指定 --</option>
+          {% for doc in doctors %}
+          <option value="{{ doc.id }}">{{ doc.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>备注</label>
+        <input type="text" name="remark">
+      </div>
+    </div>
+    <div class="mt"><button class="btn btn-primary">保存疫苗记录</button></div>
+  </form>
+</div>
+
+<!-- 住院记录 -->
+<div class="card">
+  <h3>住院记录（{{ hos|length }}）</h3>
+  <table>
+    <thead><tr><th>住院号</th><th>房间</th><th>入院日期</th><th>出院日期</th><th>日费</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>
+      {% for h in hos %}
+      <tr>
+        <td>{{ h.hos_no }}</td>
+        <td>{{ h.room or '-' }}</td>
+        <td>{{ h.in_date }}</td>
+        <td>{{ h.out_date or '-' }}</td>
+        <td>¥{{ '%.2f'|format(h.daily_fee) }}/天</td>
+        <td>
+          {% if h.status=='住院中' %}<span class="tag red">住院中</span>
+          {% else %}<span class="tag green">已出院</span>{% endif %}
+        </td>
+        <td class="actions"><a class="btn btn-xs" href="{{ url_for('hospitalization_detail', hid=h.id) }}">详情</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">暂无住院记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- 就诊历史 -->
+<div class="card">
+  <h3>就诊/挂号历史</h3>
+  <table>
+    <thead><tr><th>日期</th><th>类型</th><th>医生</th><th>主诉</th><th>状态</th></tr></thead>
+    <tbody>
+      {% for a in appts %}
+      <tr>
+        <td>{{ a.appt_date }}</td>
+        <td>{{ a.type }}</td>
+        <td>{{ a.doctor_name or '-' }}</td>
+        <td>{{ a.symptom or '-' }}</td>
+        <td>
+          {% if a.status=='待诊' %}<span class="tag orange">待诊</span>
+          {% elif a.status=='就诊中' %}<span class="tag blue">就诊中</span>
+          {% elif a.status=='已完成' %}<span class="tag green">已完成</span>
+          {% else %}<span class="tag gray">{{ a.status }}</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">暂无就诊记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
