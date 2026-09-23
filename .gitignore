@@ -1,0 +1,8 @@
+# 仁合宠物医院管理系统 - 本地数据库与临时产物不入库
+data/
+__pycache__/
+build/
+dist/
+*.spec
+*.log
+.DS_Store
