@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block pagetitle %}住院管理{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form method="get">
+    <select name="status">
+      <option value="">全部状态</option>
+      <option value="住院中" {{ 'selected' if status=='住院中' }}>住院中</option>
+      <option value="已出院" {{ 'selected' if status=='已出院' }}>已出院</option>
+    </select>
+    <button class="btn" type="submit">筛选</button>
+  </form>
+  <a class="btn btn-primary" href="{{ url_for('hospitalization_new') }}">+ 办理住院</a>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>住院号</th><th>宠物</th><th>宠物主</th><th>房间/笼位</th><th>入院日期</th><th>出院日期</th><th>日费</th><th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for h in hos %}
+      <tr>
+        <td><a href="{{ url_for('hospitalization_detail', hid=h.id) }}"><b>{{ h.hos_no }}</b></a></td>
+        <td><a href="{{ url_for('pet_detail', pid=h.pet_id) }}">{{ h.pet_name }}</a> <span class="muted">({{ h.species }})</span></td>
+        <td>{{ h.owner_name }}<br><span class="muted">{{ h.owner_phone }}</span></td>
+        <td>{{ h.room or '-' }}</td>
+        <td>{{ h.in_date }}</td>
+        <td>{{ h.out_date or '-' }}</td>
+        <td>¥{{ '%.2f'|format(h.daily_fee) }}</td>
+        <td>
+          {% if h.status=='住院中' %}<span class="tag red">住院中</span>
+          {% else %}<span class="tag green">已出院</span>{% endif %}
+        </td>
+        <td class="actions"><a class="btn btn-xs" href="{{ url_for('hospitalization_detail', hid=h.id) }}">详情/护理</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty">暂无住院记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
