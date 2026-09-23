@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block pagetitle %}新建收费单{% endblock %}
+{% block content %}
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>宠物</label>
+        <select name="pet_id" id="pet_id">
+          <option value="">-- 不关联宠物 --</option>
+          {% for p in pets %}
+          <option value="{{ p.id }}" data-owner="{{ p.owner_id }}">{{ p.name }}（{{ p.species }}）- {{ p.owner_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>宠物主</label>
+        <select name="owner_id" id="owner_id">
+          <option value="">-- 不关联宠物主 --</option>
+          {% for p in pets %}
+          <option value="{{ p.owner_id }}">{{ p.owner_name }}</option>
+          {% endfor %}
+        </select>
+        <span class="muted" id="owner-text"></span>
+      </div>
+      <div class="form-item">
+        <label>收款方式</label>
+        <select name="method">
+          {% for m in ['现金','微信','支付宝','刷卡','挂账'] %}
+          <option value="{{ m }}">{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>从处方带入（可选）</label>
+        <select onchange="loadPrescription(this.value, '{{ url_for('api_prescription', pid=0) }}'.replace('/0','/'))">
+          <option value="">-- 选择处方 --</option>
+          {% for pr in pres %}
+          <option value="{{ pr.id }}">#{{ pr.id }} {{ pr.pet_name }} ¥{{ '%.2f'|format(pr.total) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item full">
+        <label>备注</label>
+        <input type="text" name="remark" placeholder="备注">
+      </div>
+    </div>
+
+    <h3 class="section-title">收费明细 <button type="button" class="btn btn-sm" onclick="addBillRow()">+ 添加一行</button></h3>
+    <table class="bill-items">
+      <thead>
+        <tr><th>类型</th><th>项目名称</th><th>数量</th><th>单价</th><th>小计</th><th></th></tr>
+      </thead>
+      <tbody id="bill-body">
+        <tr>
+          <td><select name="item_type[]" style="width:110px">
+            <option>挂号费</option><option>诊疗费</option><option>药品费</option>
+            <option>检查费</option><option>住院费</option><option>美容费</option><option>其他</option>
+          </select></td>
+          <td><input type="text" name="item_name[]" placeholder="项目名称" style="min-width:160px"></td>
+          <td><input type="number" name="qty[]" value="1" min="1" style="width:70px" oninput="calcBillTotal()"></td>
+          <td><input type="number" name="price[]" value="0" min="0" step="0.01" style="width:90px" oninput="calcBillTotal()"></td>
+          <td class="bill-sub">0.00</td>
+          <td><button type="button" class="btn btn-danger btn-xs" onclick="this.closest('tr').remove();calcBillTotal()">删</button></td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr><td colspan="4" style="text-align:right"><b>合计：</b></td><td><b id="bill-total">0.00</b></td><td></td></tr>
+      </tfoot>
+    </table>
+
+    <div class="mt flex">
+      <button type="submit" class="btn btn-primary">保存收费单</button>
+      <a class="btn" href="{{ url_for('billing') }}">返回列表</a>
+    </div>
+  </form>
+</div>
+<script>
+  // 宠物选择联动宠物主
+  document.getElementById('pet_id').addEventListener('change', function () {
+    var opt = this.options[this.selectedIndex];
+    var ownerId = opt.getAttribute('data-owner');
+    if (ownerId) {
+      var sel = document.getElementById('owner_id');
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === ownerId) { sel.value = ownerId; break; }
+      }
+      var text = document.getElementById('owner-text');
+      text.textContent = '宠物主: ' + opt.textContent.split('-')[1];
+    }
+  });
+</script>
+{% endblock %}
