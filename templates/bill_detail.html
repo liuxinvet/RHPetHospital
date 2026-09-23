@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block pagetitle %}收费单详情{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h3>{{ bill.bill_no }}
+    <span>
+      <a class="btn btn-sm" href="{{ url_for('billing') }}">返回列表</a>
+      {% if bill.status=='未结清' %}
+      <button class="btn btn-sm btn-success" onclick="document.getElementById('pay-form').style.display='block'">收款</button>
+      {% endif %}
+    </span>
+  </h3>
+  <dl class="detail">
+    <dt>日期</dt><dd>{{ bill.bill_date }}</dd>
+    <dt>宠物</dt><dd>{{ bill.pet_name or '-' }}</dd>
+    <dt>宠物主</dt><dd>{{ bill.owner_name or '-' }}（{{ bill.owner_phone or '-' }}）</dd>
+    <dt>收款方式</dt><dd>{{ bill.method }}</dd>
+    <dt>状态</dt><dd>
+      {% if bill.status=='已结清' %}<span class="tag green">已结清</span>
+      {% elif bill.status=='已退款' %}<span class="tag gray">已退款</span>
+      {% else %}<span class="tag orange">未结清</span>{% endif %}
+    </dd>
+    <dt>备注</dt><dd>{{ bill.remark or '-' }}</dd>
+  </dl>
+
+  {% if bill.status=='未结清' %}
+  <form id="pay-form" method="post" action="{{ url_for('bill_pay', bid=bill.id) }}" style="display:none;border-top:1px solid var(--border);padding-top:12px" class="mt">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>实收金额（元）</label>
+        <input type="number" name="paid" id="paid-input" step="0.01" value="{{ bill.total }}" min="0">
+      </div>
+      <div class="form-item">
+        <label>收款方式</label>
+        <select name="method">
+          {% for m in ['现金','微信','支付宝','刷卡','挂账'] %}
+          <option value="{{ m }}" {{ 'selected' if bill.method==m }}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="mt"><button class="btn btn-success" type="submit">确认收款</button></div>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>收费明细</h3>
+  <table>
+    <thead><tr><th>类型</th><th>项目</th><th>数量</th><th>单价</th><th>小计</th></tr></thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>{{ it.item_type }}</td>
+        <td>{{ it.name }}</td>
+        <td>{{ it.qty }}</td>
+        <td>¥{{ '%.2f'|format(it.price) }}</td>
+        <td>¥{{ '%.2f'|format(it.subtotal) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="4" style="text-align:right"><b>合计：</b></td><td><b>¥{{ '%.2f'|format(bill.total) }}</b></td></tr>
+      <tr><td colspan="4" style="text-align:right"><b>已收：</b></td><td><b>¥{{ '%.2f'|format(bill.paid) }}</b></td></tr>
+    </tfoot>
+  </table>
+  <div class="mt flex">
+    {% if bill.status=='已结清' %}
+    <form method="post" action="{{ url_for('bill_refund', bid=bill.id) }}" onsubmit="return confirmSubmit('确定对该收费单执行退款吗？')">
+      <button class="btn btn-danger">退款</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('bill_delete', bid=bill.id) }}" onsubmit="return confirmSubmit('确定删除该收费单吗？')">
+      <button class="btn">删除收费单</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
