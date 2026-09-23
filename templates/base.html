@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ hospital_name }}管理系统</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="flash-wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="flash {{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+
+  <aside class="sidebar">
+    <div class="brand">{{ hospital_name }}<small>宠物医院管理系统</small></div>
+    <nav>
+      <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint=='dashboard' }}"><span class="icon">▦</span>仪表盘</a>
+      <a href="{{ url_for('owners') }}" class="{{ 'active' if request.endpoint in ['owners','owner_new','owner_edit','owner_detail'] }}"><span class="icon">☺</span>宠物主管理</a>
+      <a href="{{ url_for('pets') }}" class="{{ 'active' if request.endpoint in ['pets','pet_new','pet_edit','pet_detail'] }}"><span class="icon">♞</span>宠物档案</a>
+      <a href="{{ url_for('appointments') }}" class="{{ 'active' if request.endpoint in ['appointments'] }}"><span class="icon">▣</span>挂号就诊</a>
+      <a href="{{ url_for('records') }}" class="{{ 'active' if request.endpoint in ['records','record_new','record_edit'] }}"><span class="icon">▤</span>电子病历</a>
+      <a href="{{ url_for('prescriptions') }}" class="{{ 'active' if request.endpoint in ['prescriptions','prescription_new','prescription_detail'] }}"><span class="icon">☰</span>处方管理</a>
+      <a href="{{ url_for('medicines') }}" class="{{ 'active' if request.endpoint in ['medicines','medicine_new','medicine_edit'] }}"><span class="icon">◉</span>药品库存</a>
+      <a href="{{ url_for('billing') }}" class="{{ 'active' if request.endpoint in ['billing','billing_new','bill_detail'] }}"><span class="icon">¥</span>收费管理</a>
+      <a href="{{ url_for('hospitalizations') }}" class="{{ 'active' if request.endpoint in ['hospitalizations','hospitalization_new','hospitalization_detail'] }}"><span class="icon">▣</span>住院护理</a>
+      <a href="{{ url_for('doctors') }}" class="{{ 'active' if request.endpoint in ['doctors'] }}"><span class="icon">✚</span>医生排班</a>
+      <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint in ['settings'] }}"><span class="icon">⚙</span>系统设置</a>
+    </nav>
+    <div class="foot">{{ hospital_name }} · 本地版</div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="page-title">{% block pagetitle %}{% endblock %}</div>
+      <div class="user-box">
+        <span>{{ current_user }}</span>
+        <span class="role-tag">{{ {'admin':'管理员','doctor':'医生','frontdesk':'前台'}.get(current_role, current_role) }}</span>
+        <a class="logout" href="{{ url_for('logout') }}">退出登录</a>
+      </div>
+    </div>
+    {% block content %}{% endblock %}
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
