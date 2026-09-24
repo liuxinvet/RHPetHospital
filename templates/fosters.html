@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block pagetitle %}寄养管理{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form method="get">
+    <select name="status">
+      <option value="">全部状态</option>
+      {% for s in ['寄养中','已结束'] %}
+      <option value="{{ s }}" {{ 'selected' if status==s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">查询</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>寄养登记</h3>
+  <form method="post" action="{{ url_for('foster_new') }}">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>宠物 *</label>
+        <select name="pet_id" required>
+          <option value="">-- 选择宠物（在养中不可选）--</option>
+          {% for p in pets %}
+          <option value="{{ p.id }}">{{ p.name }}（{{ p.species }}）- {{ p.owner_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>入养日期 *</label>
+        <input type="date" name="in_date" value="{{ today }}">
+      </div>
+      <div class="form-item">
+        <label>日寄养费（元）</label>
+        <input type="number" name="daily_fee" value="0" min="0" step="0.5">
+      </div>
+      <div class="form-item">
+        <label>预收押金（元）</label>
+        <input type="number" name="deposit" value="0" min="0" step="0.5">
+      </div>
+      <div class="form-item full">
+        <label>寄养原因</label>
+        <input type="text" name="reason" placeholder="如：出差、外出旅游、术后休养">
+      </div>
+      <div class="form-item full">
+        <label>备注</label>
+        <input type="text" name="remark" placeholder="饲养要求、注意事项、自带粮等">
+      </div>
+    </div>
+    <div class="mt"><button class="btn btn-primary" type="submit">确认寄养</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>寄养记录（{{ status or '全部' }}）</h3>
+  <table>
+    <thead>
+      <tr><th>寄养单号</th><th>宠物</th><th>宠物主</th><th>入养日</th><th>出养日</th><th>在养天数</th><th>日费</th><th>总费用</th><th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for f in fosters %}
+      <tr>
+        <td><b>{{ f.foster_no }}</b></td>
+        <td><a href="{{ url_for('pet_detail', pid=f.pet_id) }}">{{ f.pet_name }}</a> <span class="muted">({{ f.species }})</span></td>
+        <td>{{ f.owner_name }}<br><span class="muted">{{ f.owner_phone }}</span></td>
+        <td>{{ f.in_date }}</td>
+        <td>{{ f.out_date or '-' }}</td>
+        <td>{{ f.stay_days if f.status=='寄养中' else '-' }} 天</td>
+        <td>¥{{ '%.2f'|format(f.daily_fee) }}</td>
+        <td>{% if f.total_fee %}¥{{ '%.2f'|format(f.total_fee) }}{% else %}-{% endif %}</td>
+        <td>
+          {% if f.status=='寄养中' %}<span class="tag blue">寄养中</span>
+          {% else %}<span class="tag green">已结束</span>{% endif %}
+        </td>
+        <td class="actions">
+          {% if f.status=='寄养中' %}
+          <button class="btn btn-xs btn-primary" onclick="showFinish('{{ f.id }}', '{{ f.pet_name }}', '{{ f.in_date }}', '{{ f.daily_fee }}')">结束结算</button>
+          {% endif %}
+          <form method="post" action="{{ url_for('foster_delete', fid=f.id) }}" style="display:inline"
+                onsubmit="return confirmSubmit('确定删除该寄养记录吗？')">
+            <button class="btn btn-xs btn-danger">删</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="empty">暂无寄养记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- 结束寄养弹窗 -->
+<div id="finish-modal" class="modal-mask" style="display:none">
+  <div class="modal">
+    <h3>结束寄养结算</h3>
+    <form method="post" id="finish-form">
+      <div class="form-grid">
+        <div class="form-item"><label>宠物</label><input type="text" id="finish-pet" disabled></div>
+        <div class="form-item"><label>入养日</label><input type="text" id="finish-in" disabled></div>
+        <div class="form-item"><label>日费</label><input type="text" id="finish-daily" disabled></div>
+        <div class="form-item"><label>出养日期</label><input type="date" name="out_date" id="finish-out" value="{{ today }}"></div>
+      </div>
+      <p id="finish-preview" class="muted"></p>
+      <label class="chk"><input type="checkbox" name="to_bill" value="1" checked> 自动生成收费单</label>
+      <div class="mt flex">
+        <button type="submit" class="btn btn-primary">确认结算</button>
+        <button type="button" class="btn" onclick="document.getElementById('finish-modal').style.display='none'">取消</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+<script>
+function showFinish(id, pet, inDate, daily) {
+  document.getElementById('finish-pet').value = pet;
+  document.getElementById('finish-in').value = inDate;
+  document.getElementById('finish-daily').value = daily;
+  document.getElementById('finish-form').action = '/fosters/' + id + '/finish';
+  var today = document.getElementById('finish-out').value;
+  var days = Math.max(1, Math.floor((new Date(today) - new Date(inDate)) / 86400000) + 1);
+  document.getElementById('finish-preview').textContent = '预计 ' + days + ' 天，结算 ' + (days * parseFloat(daily)).toFixed(2) + ' 元';
+  document.getElementById('finish-modal').style.display = 'flex';
+}
+document.addEventListener('DOMContentLoaded', function () {
+  var out = document.getElementById('finish-out');
+  if (out) out.addEventListener('change', function () {
+    var inDate = document.getElementById('finish-in').value;
+    var daily = parseFloat(document.getElementById('finish-daily').value || 0);
+    var days = Math.max(1, Math.floor((new Date(this.value) - new Date(inDate)) / 86400000) + 1);
+    document.getElementById('finish-preview').textContent = '预计 ' + days + ' 天，结算 ' + (days * daily).toFixed(2) + ' 元';
+  });
+});
+</script>
