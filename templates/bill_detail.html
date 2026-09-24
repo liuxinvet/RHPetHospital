@@ -21,6 +21,8 @@
       {% elif bill.status=='已退款' %}<span class="tag gray">已退款</span>
       {% else %}<span class="tag orange">未结清</span>{% endif %}
     </dd>
+    <dt>销售员工</dt><dd>{{ bill.sale_employee_name or '-' }}</dd>
+    <dt>服务员工</dt><dd>{{ bill.service_employee_name or '-' }}</dd>
     <dt>备注</dt><dd>{{ bill.remark or '-' }}</dd>
   </dl>
 
