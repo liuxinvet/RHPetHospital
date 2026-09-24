@@ -33,7 +33,15 @@
         <input type="date" name="appt_date" value="{{ d }}">
       </div>
       <div class="form-item">
-        <label>时段</label>
+        <label>时段类型</label>
+        <select name="time_type">
+          {% for t in ['上午','下午','夜间'] %}
+          <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>具体时间</label>
         <input type="time" name="appt_time">
       </div>
       <div class="form-item">
@@ -60,6 +68,10 @@
       <div class="form-item full">
         <label>主诉症状</label>
         <input type="text" name="symptom" placeholder="如：呕吐腹泻、精神不振、咳嗽">
+      </div>
+      <div class="form-item full">
+        <label>备注</label>
+        <input type="text" name="remark" placeholder="如：转诊、复诊要求、注意事项">
       </div>
     </div>
     <div class="mt"><button class="btn btn-primary" type="submit">确认挂号</button></div>
