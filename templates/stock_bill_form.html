@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block pagetitle %}新建库存单据{% endblock %}
+{% block content %}
+
+<div class="card form-card">
+  <form method="post" class="stack">
+    <div class="flex" style="gap:16px">
+      <label>单据类型
+        <select name="bill_type" id="bill-type">
+          <option value="采购入库">采购入库（+库存）</option>
+          <option value="其他入库">其他入库（+库存）</option>
+          <option value="报损">报损出库（-库存）</option>
+        </select>
+      </label>
+      <label>单据日期 <input type="date" name="bill_date" value="{{ today }}"></label>
+    </div>
+    <label>供应商 / 来源 <input type="text" name="supplier" placeholder="如：XX兽药批发"></label>
+    <label>备注 <input type="text" name="remark" placeholder="选填"></label>
+
+    <h3>药品明细</h3>
+    <div id="items">
+      <div class="stock-item flex" style="gap:8px;margin-bottom:8px">
+        <select name="medicine_id[]" style="flex:3" onchange="fillPrice(this)">
+          <option value="">选择药品</option>
+          {% for m in meds %}
+          <option value="{{ m.id }}" data-price="{{ m.sale_price }}" data-stock="{{ m.stock }}">{{ m.name }}（{{ m.spec or '-' }}，库存 {{ m.stock }}{{ m.unit }}，售价 ¥{{ '%.2f'|format(m.sale_price) }}）</option>
+          {% endfor %}
+        </select>
+        <input type="number" name="qty[]" placeholder="数量" min="1" style="width:90px" oninput="calcAmt(this)">
+        <input type="number" name="price[]" placeholder="单价" step="0.01" min="0" style="width:110px" oninput="calcAmt(this)">
+        <span class="amt" style="width:90px;text-align:right">¥0.00</span>
+        <button type="button" class="btn btn-xs btn-danger" onclick="this.closest('.stock-item').remove();calcTotal()">×</button>
+      </div>
+    </div>
+    <div>
+      <button type="button" class="btn" onclick="addStockItem()">+ 添加一行</button>
+      <span style="float:right;font-weight:bold">合计：<span id="grand">¥0.00</span></span>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">保存单据并更新库存</button>
+      <a class="btn" href="{{ url_for('stock_bills') }}">返回</a>
+    </div>
+  </form>
+</div>
+
+<script>
+function itemHtml(){
+  return `<div class="stock-item flex" style="gap:8px;margin-bottom:8px">
+    <select name="medicine_id[]" style="flex:3" onchange="fillPrice(this)">
+      <option value="">选择药品</option>
+      {% for m in meds %}
+      <option value="{{ m.id }}" data-price="{{ m.sale_price }}">{{ m.name }}（{{ m.spec or '-' }}，库存 {{ m.stock }}{{ m.unit }}）</option>
+      {% endfor %}
+    </select>
+    <input type="number" name="qty[]" placeholder="数量" min="1" style="width:90px" oninput="calcAmt(this)">
+    <input type="number" name="price[]" placeholder="单价" step="0.01" min="0" style="width:110px" oninput="calcAmt(this)">
+    <span class="amt" style="width:90px;text-align:right">¥0.00</span>
+    <button type="button" class="btn btn-xs btn-danger" onclick="this.closest('.stock-item').remove();calcTotal()">×</button>
+  </div>`;
+}
+function addStockItem(){
+  document.getElementById('items').insertAdjacentHTML('beforeend', itemHtml());
+}
+function fillPrice(sel){
+  var price = sel.selectedOptions[0] && sel.selectedOptions[0].dataset.price;
+  if(price && !sel.closest('.stock-item').querySelector('input[name="price[]"]').value){
+    sel.closest('.stock-item').querySelector('input[name="price[]"]').value = price;
+  }
+  calcAmt(sel);
+}
+function calcAmt(el){
+  var row = el.closest('.stock-item');
+  var qty = parseFloat(row.querySelector('input[name="qty[]"]').value || 0);
+  var price = parseFloat(row.querySelector('input[name="price[]"]').value || 0);
+  row.querySelector('.amt').textContent = '¥' + (qty*price).toFixed(2);
+  calcTotal();
+}
+function calcTotal(){
+  var total = 0;
+  document.querySelectorAll('.stock-item .amt').forEach(function(s){
+    total += parseFloat(s.textContent.replace('¥','') || 0);
+  });
+  document.getElementById('grand').textContent = '¥' + total.toFixed(2);
+}
+</script>
+{% endblock %}
