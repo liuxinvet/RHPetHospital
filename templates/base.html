@@ -23,9 +23,14 @@
       <a href="{{ url_for('pets') }}" class="{{ 'active' if request.endpoint in ['pets','pet_new','pet_edit','pet_detail'] }}"><span class="icon">♞</span>宠物档案</a>
       <a href="{{ url_for('appointments') }}" class="{{ 'active' if request.endpoint in ['appointments'] }}"><span class="icon">▣</span>挂号就诊</a>
       <a href="{{ url_for('records') }}" class="{{ 'active' if request.endpoint in ['records','record_new','record_edit'] }}"><span class="icon">▤</span>电子病历</a>
+      <a href="{{ url_for('fosters') }}" class="{{ 'active' if request.endpoint in ['fosters'] }}"><span class="icon">▧</span>寄养管理</a>
+      <a href="{{ url_for('return_visits') }}" class="{{ 'active' if request.endpoint in ['return_visits'] }}"><span class="icon">↻</span>回访管理</a>
       <a href="{{ url_for('prescriptions') }}" class="{{ 'active' if request.endpoint in ['prescriptions','prescription_new','prescription_detail'] }}"><span class="icon">☰</span>处方管理</a>
       <a href="{{ url_for('medicines') }}" class="{{ 'active' if request.endpoint in ['medicines','medicine_new','medicine_edit'] }}"><span class="icon">◉</span>药品库存</a>
+      <a href="{{ url_for('stock_bills') }}" class="{{ 'active' if request.endpoint in ['stock_bills','stock_bill_new','stock_bill_detail','stock_check'] }}"><span class="icon">⇅</span>库存单据</a>
+      <a href="{{ url_for('cards') }}" class="{{ 'active' if request.endpoint in ['cards','card_new','card_detail'] }}"><span class="icon">◆</span>会员卡</a>
       <a href="{{ url_for('billing') }}" class="{{ 'active' if request.endpoint in ['billing','billing_new','bill_detail'] }}"><span class="icon">¥</span>收费管理</a>
+      <a href="{{ url_for('reports') }}" class="{{ 'active' if request.endpoint in ['reports'] }}"><span class="icon">▥</span>经营报表</a>
       <a href="{{ url_for('hospitalizations') }}" class="{{ 'active' if request.endpoint in ['hospitalizations','hospitalization_new','hospitalization_detail'] }}"><span class="icon">▣</span>住院护理</a>
       <a href="{{ url_for('doctors') }}" class="{{ 'active' if request.endpoint in ['doctors'] }}"><span class="icon">✚</span>医生排班</a>
       <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint in ['settings'] }}"><span class="icon">⚙</span>系统设置</a>
