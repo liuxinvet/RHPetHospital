@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block pagetitle %}回访管理{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form method="get">
+    <select name="status">
+      <option value="">全部状态</option>
+      {% for s in ['待回访','已回访','无需回访'] %}
+      <option value="{{ s }}" {{ 'selected' if status==s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">查询</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>新建回访计划</h3>
+  <form method="post" action="{{ url_for('return_visit_new') }}">
+    <div class="form-grid">
+      <div class="form-item">
+        <label>宠物 *</label>
+        <select name="pet_id" required>
+          <option value="">-- 选择宠物 --</option>
+          {% for p in pets %}
+          <option value="{{ p.id }}">{{ p.name }}（{{ p.species }}）- {{ p.owner_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>计划回访日期 *</label>
+        <input type="date" name="plan_date" value="{{ today }}">
+      </div>
+      <div class="form-item">
+        <label>回访方式</label>
+        <select name="visit_type">
+          {% for t in ['电话','微信','到店复诊'] %}
+          <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>负责医生</label>
+        <select name="main_employee_id">
+          <option value="">-- 未指定 --</option>
+          {% for doc in doctors %}
+          <option value="{{ doc.id }}">{{ doc.name }}（{{ doc.title }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>关联病历ID</label>
+        <input type="number" name="record_id" placeholder="可选">
+      </div>
+      <div class="form-item full">
+        <label>诊断/回访要点</label>
+        <input type="text" name="diagnosis" placeholder="如：术后恢复情况、皮肤病复查">
+      </div>
+      <div class="form-item full">
+        <label>备注</label>
+        <input type="text" name="remark" placeholder="回访注意事项">
+      </div>
+    </div>
+    <div class="mt"><button class="btn btn-primary" type="submit">登记回访</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>回访列表（{{ status or '全部' }}）</h3>
+  <table>
+    <thead>
+      <tr><th>计划日期</th><th>宠物</th><th>宠物主</th><th>电话</th><th>方式</th><th>负责医生</th><th>诊断要点</th><th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for r in visits %}
+      <tr>
+        <td>{{ r.plan_date }}{% if r.status=='待回访' and r.plan_date<=today %} <span class="tag red">逾期</span>{% endif %}</td>
+        <td><a href="{{ url_for('pet_detail', pid=r.pet_id) }}">{{ r.pet_name }}</a> <span class="muted">({{ r.species }})</span></td>
+        <td>{{ r.owner_name }}</td>
+        <td>{{ r.owner_phone }}</td>
+        <td>{{ r.visit_type }}</td>
+        <td>{{ r.doctor_name or '-' }}</td>
+        <td>{{ r.diagnosis or '-' }}</td>
+        <td>
+          {% if r.status=='待回访' %}<span class="tag orange">待回访</span>
+          {% elif r.status=='已回访' %}<span class="tag green">已回访</span>
+          {% else %}<span class="tag gray">无需回访</span>{% endif %}
+        </td>
+        <td class="actions">
+          {% if r.status=='待回访' %}
+          <button class="btn btn-xs btn-primary" onclick="showDone('{{ r.id }}', '{{ r.pet_name }}')">完成回访</button>
+          <form method="post" action="{{ url_for('return_visit_skip', vid=r.id) }}" style="display:inline">
+            <button class="btn btn-xs">无需回访</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('return_visit_delete', vid=r.id) }}" style="display:inline"
+                onsubmit="return confirmSubmit('确定删除该回访记录吗？')">
+            <button class="btn btn-xs btn-danger">删</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="empty">暂无回访记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div id="done-modal" class="modal-mask" style="display:none">
+  <div class="modal">
+    <h3>完成回访</h3>
+    <form method="post" id="done-form">
+      <div class="form-item"><label>宠物</label><input type="text" id="done-pet" disabled></div>
+      <div class="form-item"><label>实际回访日期</label><input type="date" name="actual_date" value="{{ today }}"></div>
+      <div class="form-item full"><label>回访结果</label>
+        <textarea name="visit_result" rows="3" placeholder="宠物恢复情况、主人反馈、建议"></textarea>
+      </div>
+      <div class="mt flex">
+        <button type="submit" class="btn btn-primary">确认完成</button>
+        <button type="button" class="btn" onclick="document.getElementById('done-modal').style.display='none'">取消</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+<script>
+function showDone(id, pet) {
+  document.getElementById('done-pet').value = pet;
+  document.getElementById('done-form').action = '/return_visits/' + id + '/done';
+  document.getElementById('done-modal').style.display = 'flex';
+}
+</script>
