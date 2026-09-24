@@ -1,60 +1,240 @@
 {% extends "base.html" %}
 {% block pagetitle %}{{ title }}{% endblock %}
 {% block content %}
+
 <div class="card">
-  <form method="post">
+  <h3>{{ title }}</h3>
+  <form method="post" id="recordForm">
+    {% if record %}
+    <input type="hidden" name="pet_id" value="{{ record.pet_id }}">
+    {% else %}
     <div class="form-grid">
       <div class="form-item">
         <label>宠物 *</label>
-        <select name="pet_id" required>
+        <select name="pet_id" required {% if pid %}disabled{% endif %}>
           <option value="">-- 选择宠物 --</option>
           {% for p in pets %}
-          <option value="{{ p.id }}" {{ 'selected' if pid|string==p.id|string }}>{{ p.name }}（{{ p.species }}）- {{ p.owner_name }}</option>
+          <option value="{{ p.id }}" {{ 'selected' if pid|string==p.id|string }}>{{ p.name }}（{{ p.species }} · {{ p.owner_name }}）</option>
           {% endfor %}
         </select>
+        {% if pid %}<input type="hidden" name="pet_id" value="{{ pid }}">{% endif %}
+      </div>
+      <div class="form-item">
+        <label>就诊日期 *</label>
+        <input type="date" name="record_date" value="{{ record.record_date if record else today_str }}">
       </div>
       <div class="form-item">
         <label>接诊医生</label>
         <select name="doctor_id">
           <option value="">-- 未指定 --</option>
           {% for doc in doctors %}
-          <option value="{{ doc.id }}">{{ doc.name }}（{{ doc.title }}）</option>
+          <option value="{{ doc.id }}" {{ 'selected' if record and record.doctor_id==doc.id }}>{{ doc.name }}（{{ doc.title }}）</option>
           {% endfor %}
         </select>
       </div>
       <div class="form-item">
-        <label>病历日期</label>
-        <input type="date" name="record_date" value="{{ today }}">
+        <label>关联挂号</label>
+        <input type="number" name="appointment_id" value="{{ record.appointment_id if record else aid or '' }}" placeholder="挂号ID（可选）">
+      </div>
+    </div>
+    {% endif %}
+
+    <h4 class="sec-title">一、主诉与问诊</h4>
+    <div class="form-grid">
+      <div class="form-item full"><label>主诉</label>
+        <textarea name="chief_complaint" rows="2" placeholder="主人主诉：症状、持续时间、诱因等">{{ record.chief_complaint if record else '' }}</textarea>
+      </div>
+      <div class="form-item full"><label>既往病史（免疫/驱虫史）</label>
+        <textarea name="previous_medical" rows="2" placeholder="既往疾病史、过敏史、最近免疫与驱虫情况">{{ record.previous_medical if record else '' }}</textarea>
       </div>
       <div class="form-item">
-        <label>关联挂号（可选）</label>
-        <input type="number" name="appointment_id" value="{{ aid }}" placeholder="挂号ID">
+        <label>本次是否接种疫苗</label>
+        <select name="is_vaccine">
+          <option value="">未选择</option>
+          {% for v in ['否','是'] %}
+          <option value="{{ v }}" {{ 'selected' if record and record.is_vaccine==v }}>{{ v }}</option>
+          {% endfor %}
+        </select>
       </div>
-      <div class="form-item full">
-        <label>主诉</label>
-        <input type="text" name="chief_complaint" placeholder="如：呕吐 2 天、食欲不振">
+      <div class="form-item">
+        <label>本次是否驱虫</label>
+        <select name="is_deworming">
+          <option value="">未选择</option>
+          {% for v in ['否','是'] %}
+          <option value="{{ v }}" {{ 'selected' if record and record.is_deworming==v }}>{{ v }}</option>
+          {% endfor %}
+        </select>
       </div>
-      <div class="form-item full">
-        <label>检查所见</label>
-        <textarea name="examination" placeholder="体格检查、实验室检查、影像检查等结果"></textarea>
+      <div class="form-item"><label>饮食方式</label>
+        <input name="feeding_method" value="{{ record.feeding_method if record else '' }}" placeholder="如：干粮/湿粮/自制">
       </div>
-      <div class="form-item full">
-        <label>诊断</label>
-        <input type="text" name="diagnosis" placeholder="如：急性胃肠炎">
+      <div class="form-item"><label>喂食频率</label>
+        <input name="feeding_frequency" value="{{ record.feeding_frequency if record else '' }}" placeholder="如：每日2次">
       </div>
-      <div class="form-item full">
-        <label>治疗方案 / 医嘱</label>
-        <textarea name="treatment" placeholder="治疗措施、用药、护理要求等"></textarea>
-      </div>
-      <div class="form-item full">
-        <label>复诊建议</label>
-        <input type="text" name="follow_up" placeholder="如：3 天后复诊">
+      <div class="form-item full"><label>饮食变化</label>
+        <input name="food_changes" value="{{ record.food_changes if record else '' }}" placeholder="近期是否更换粮、食欲变化">
       </div>
     </div>
-    <div class="mt flex">
-      <button type="submit" class="btn btn-primary">保存病历</button>
-      <a class="btn" href="{{ url_for('records') }}">返回列表</a>
+
+    <h4 class="sec-title">二、体格检查（生命体征）</h4>
+    <div class="form-grid">
+      <div class="form-item"><label>体温（℃）</label><input type="number" step="0.1" name="temperature" value="{{ record.temperature if record else '' }}"></div>
+      <div class="form-item"><label>体重（kg）</label><input type="number" step="0.1" name="weight" value="{{ record.weight if record else '' }}"></div>
+      <div class="form-item"><label>呼吸（次/分）</label><input type="number" name="breathe" value="{{ record.breathe if record else '' }}"></div>
+      <div class="form-item"><label>心率（次/分）</label><input type="number" name="heartrate" value="{{ record.heartrate if record else '' }}"></div>
+      <div class="form-item"><label>瞳孔</label><input name="tongkong" value="{{ record.tongkong if record else '' }}" placeholder="如：等大等圆，对光反射灵敏"></div>
+      <div class="form-item"><label>血压</label><input name="blood_pressure" value="{{ record.blood_pressure if record else '' }}" placeholder="如：120/80 mmHg"></div>
     </div>
+
+    <h4 class="sec-title">三、体况评分</h4>
+    <div class="form-grid">
+      <div class="form-item"><label>精神状态</label>
+        <select name="mentality">
+          <option value="">未选择</option>
+          {% for v in ['正常','稍差','沉郁','昏迷'] %}
+          <option value="{{ v }}" {{ 'selected' if record and record.mentality==v }}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item"><label>体况评分 BCS（1-9）</label>
+        <select name="physical_condition_score">
+          <option value="">未选择</option>
+          {% for i in range(1,10) %}
+          <option value="{{ i }}" {{ 'selected' if record and record.physical_condition_score==i|string }}>{{ i }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item"><label>肌肉评分 MCS（1-4）</label>
+        <select name="muscle_score">
+          <option value="">未选择</option>
+          {% for i in range(1,5) %}
+          <option value="{{ i }}" {{ 'selected' if record and record.muscle_score==i|string }}>{{ i }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item"><label>牙周评分（1-4）</label>
+        <select name="periodontal_score">
+          <option value="">未选择</option>
+          {% for i in range(1,5) %}
+          <option value="{{ i }}" {{ 'selected' if record and record.periodontal_score==i|string }}>{{ i }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <h4 class="sec-title">四、系统检查</h4>
+    <div class="form-grid">
+      <div class="form-item"><label>眼</label><input name="eyes" value="{{ record.eyes if record else '' }}" placeholder="结膜、角膜、瞳孔"></div>
+      <div class="form-item"><label>鼻</label><input name="nose" value="{{ record.nose if record else '' }}" placeholder="分泌物、呼吸音"></div>
+      <div class="form-item"><label>耳</label><input name="ears" value="{{ record.ears if record else '' }}" placeholder="耳道、分泌物"></div>
+      <div class="form-item"><label>口腔</label><input name="oral_cavity" value="{{ record.oral_cavity if record else '' }}" placeholder="黏膜、牙结石、牙龈"></div>
+      <div class="form-item"><label>肌肉/骨骼</label><input name="muscle" value="{{ record.muscle if record else '' }}" placeholder="步态、触诊"></div>
+      <div class="form-item"><label>皮肤/被毛</label><input name="skins" value="{{ record.skins if record else '' }}" placeholder="皮疹、脱毛、寄生虫"></div>
+      <div class="form-item"><label>神经</label><input name="nerve" value="{{ record.nerve if record else '' }}" placeholder="反射、意识"></div>
+      <div class="form-item"><label>泌尿/生殖</label><input name="urology" value="{{ record.urology if record else '' }}" placeholder="排尿、外生殖器"></div>
+      <div class="form-item"><label>心肺</label><input name="heart_lung" value="{{ record.heart_lung if record else '' }}" placeholder="心音、肺音"></div>
+      <div class="form-item"><label>腹部</label><input name="abdomen" value="{{ record.abdomen if record else '' }}" placeholder="触诊、脏器"></div>
+      <div class="form-item"><label>淋巴结</label><input name="lymph_gland" value="{{ record.lymph_gland if record else '' }}" placeholder="下颌、腋下、腹股沟"></div>
+    </div>
+
+    <h4 class="sec-title">五、脱水评估</h4>
+    <div class="form-grid">
+      <div class="form-item"><label>皮肤弹性</label>
+        <select name="skin_elasticity">
+          <option value="">未选择</option>
+          {% for v in ['正常','轻度脱水','中度脱水','重度脱水'] %}
+          <option value="{{ v }}" {{ 'selected' if record and record.skin_elasticity==v }}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item"><label>眼窝</label>
+        <select name="eye_condition">
+          <option value="">未选择</option>
+          {% for v in ['正常','轻度凹陷','明显凹陷'] %}
+          <option value="{{ v }}" {{ 'selected' if record and record.eye_condition==v }}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item"><label>口腔黏膜</label>
+        <select name="oral_mucosa">
+          <option value="">未选择</option>
+          {% for v in ['湿润','干燥','黏腻'] %}
+          <option value="{{ v }}" {{ 'selected' if record and record.oral_mucosa==v }}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item"><label>CRT（毛细血管再充盈）</label>
+        <select name="crt">
+          <option value="">未选择</option>
+          {% for v in ['<1s','1-2s','>2s'] %}
+          <option value="{{ v }}" {{ 'selected' if record and record.crt==v }}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <h4 class="sec-title">六、检查与检验</h4>
+    <div class="form-item full"><label>实验室/影像检查</label>
+      <textarea name="examination" rows="3" placeholder="血常规、生化、B超、X光等检查结果">{{ record.examination if record else '' }}</textarea>
+    </div>
+
+    <h4 class="sec-title">七、诊断与处置</h4>
+    <div class="form-grid">
+      <div class="form-item full"><label>诊断</label>
+        <textarea name="diagnosis" rows="2" placeholder="初步诊断/确诊">{{ record.diagnosis if record else '' }}</textarea>
+      </div>
+      <div class="form-item full"><label>治疗方案</label>
+        <textarea name="treatment" rows="3" placeholder="用药方案、手术方案、输液计划等">{{ record.treatment if record else '' }}</textarea>
+      </div>
+      <div class="form-item full"><label>医嘱/随访建议</label>
+        <textarea name="follow_up" rows="2" placeholder="复诊时间、注意事项、护理建议">{{ record.follow_up if record else '' }}</textarea>
+      </div>
+    </div>
+
+    <h4 class="sec-title">八、护理与住院记录</h4>
+    <div class="form-grid">
+      <div class="form-item full"><label>护理记录</label>
+        <textarea name="carenote" rows="2" placeholder="护理措施、伤口处理、给药记录">{{ record.carenote if record else '' }}</textarea>
+      </div>
+      <div class="form-item full"><label>病程记录</label>
+        <textarea name="processnote" rows="2" placeholder="每日病情变化、转归">{{ record.processnote if record else '' }}</textarea>
+      </div>
+      <div class="form-item full"><label>住院医嘱</label>
+        <textarea name="hospitalnode" rows="2" placeholder="住院期间注意事项">{{ record.hospitalnode if record else '' }}</textarea>
+      </div>
+      <div class="form-item full"><label>手术记录</label>
+        <textarea name="surgical_record" rows="3" placeholder="手术名称、时间、麻醉、过程、术后情况">{{ record.surgical_record if record else '' }}</textarea>
+      </div>
+      <div class="form-item full"><label>查房记录</label>
+        <textarea name="visitrecord" rows="2" placeholder="查房发现、调整">{{ record.visitrecord if record else '' }}</textarea>
+      </div>
+    </div>
+
+    <h4 class="sec-title">九、病历归档信息</h4>
+    <div class="form-grid">
+      <div class="form-item"><label>疑似病名</label>
+        <input name="suspected_illness" value="{{ record.suspected_illness if record else '' }}" placeholder="疑似疾病名称"></div>
+      <div class="form-item"><label>复诊次数</label>
+        <input type="number" name="again_visit_num" value="{{ record.again_visit_num if record else '' }}"></div>
+      <div class="form-item"><label>是否预约复诊</label>
+        <select name="open_appointment">
+          <option value="">未选择</option>
+          {% for v in ['否','是'] %}
+          <option value="{{ v }}" {{ 'selected' if record and record.open_appointment==v }}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item"><label>复诊预约时间</label>
+        <input type="date" name="appointment_time" value="{{ record.appointment_time if record else '' }}"></div>
+    </div>
+
+    <div class="form-grid">
+      <div class="form-item full"><label>归档备注</label>
+        <input name="chiefnote" value="{{ record.chiefnote if record else '' }}" placeholder="其他说明"></div>
+    </div>
+
+    <div class="mt"><button class="btn btn-primary" type="submit">保存病历</button>
+      <a class="btn" href="{{ url_for('records') }}">返回列表</a></div>
   </form>
 </div>
 {% endblock %}
