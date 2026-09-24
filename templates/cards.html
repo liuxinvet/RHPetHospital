@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block pagetitle %}会员卡{% endblock %}
+{% block content %}
+
+<div class="stat-grid">
+  <div class="stat-card"><div class="num">{{ active }}</div><div>正常卡数</div></div>
+  <div class="stat-card"><div class="num">¥{{ '%.0f'|format(total_balance) }}</div><div>在卡余额</div></div>
+  <div class="stat-card"><div class="num">¥{{ '%.0f'|format(month_recharge) }}</div><div>本月充值</div></div>
+</div>
+
+<div class="toolbar">
+  <form method="get">
+    <input type="text" name="kw" value="{{ kw }}" placeholder="卡号 / 卡名 / 宠物主 / 电话">
+    <select name="status">
+      <option value="">全部状态</option>
+      {% for s in ['正常','停用','挂失','注销'] %}
+      <option value="{{ s }}" {{ 'selected' if status==s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">筛选</button>
+    {% if kw or status %}<a class="btn" href="{{ url_for('cards') }}">清除</a>{% endif %}
+  </form>
+  <a class="btn btn-primary" href="{{ url_for('card_new') }}">+ 开卡</a>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>卡号</th><th>卡名</th><th>类型</th><th>宠物主</th><th>余额</th><th>剩余次数</th><th>积分</th><th>折扣</th><th>状态</th><th>开卡时间</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for c in cards %}
+      <tr>
+        <td><b>{{ c.card_no }}</b></td>
+        <td>{{ c.card_name or '-' }}</td>
+        <td>{{ c.card_type }}</td>
+        <td>{{ c.owner_name }}<small>{{ c.owner_phone }}</small></td>
+        <td>¥{{ '%.2f'|format(c.balance) }}</td>
+        <td>{{ c.times_left }}</td>
+        <td>{{ c.points }}</td>
+        <td>{{ '%.1f'|format(c.discount * 10) }} 折</td>
+        <td>
+          {% if c.status=='正常' %}<span class="tag green">{{ c.status }}</span>
+          {% elif c.status=='停用' %}<span class="tag red">{{ c.status }}</span>
+          {% else %}<span class="tag gray">{{ c.status }}</span>{% endif %}
+        </td>
+        <td>{{ c.created_at[:10] }}</td>
+        <td class="actions">
+          <a class="btn btn-xs" href="{{ url_for('card_detail', cid=c.id) }}">详情</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="empty">暂无会员卡，点击右上角「+ 开卡」</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
