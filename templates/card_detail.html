@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block pagetitle %}会员卡详情{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <div>
+    <a class="btn" href="{{ url_for('cards') }}">← 返回列表</a>
+  </div>
+  <div>
+    {% if card.status == '正常' %}
+    <button class="btn btn-warning" onclick="document.getElementById('recharge-box').style.display='block'">充值</button>
+    <button class="btn btn-success" onclick="document.getElementById('consume-box').style.display='block'">{{ '扣次' if card.card_type=='计次卡' else '扣款' }}</button>
+    <form method="post" action="{{ url_for('card_toggle', cid=card.id) }}" style="display:inline">
+      <button class="btn" type="submit">停用</button>
+    </form>
+    {% else %}
+    <form method="post" action="{{ url_for('card_toggle', cid=card.id) }}" style="display:inline">
+      <button class="btn btn-success" type="submit">启用</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('card_delete', cid=card.id) }}" style="display:inline"
+          onsubmit="return confirmSubmit('确定删除该会员卡？其流水将一并删除')">
+      <button class="btn btn-danger" type="submit">删除</button>
+    </form>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card"><div class="num">{{ card.card_no }}</div><div>{{ card.card_name or card.card_type }}</div></div>
+  <div class="stat-card"><div class="num">¥{{ '%.2f'|format(card.balance) }}</div><div>储值余额</div></div>
+  <div class="stat-card"><div class="num">{{ card.times_left }}</div><div>剩余次数</div></div>
+  <div class="stat-card"><div class="num">{{ card.points }}</div><div>积分</div></div>
+</div>
+
+<div class="card">
+  <h3>基本信息</h3>
+  <table class="kv">
+    <tr><td>宠物主</td><td>{{ card.owner_name }}（{{ card.owner_phone or '-' }}）</td><td>卡类型</td><td>{{ card.card_type }}</td></tr>
+    <tr><td>折扣</td><td>{{ '%.1f'|format(card.discount * 10) }} 折</td><td>状态</td><td>{{ card.status }}</td></tr>
+    <tr><td>累计充值</td><td>¥{{ '%.2f'|format(card.total_recharge) }}</td><td>累计消费</td><td>¥{{ '%.2f'|format(card.total_consume) }}</td></tr>
+    <tr><td>开卡时间</td><td>{{ card.created_at }}</td><td>备注</td><td>{{ card.remark or '-' }}</td></tr>
+  </table>
+</div>
+
+<div id="recharge-box" class="modal-mask" style="display:none">
+  <div class="modal">
+    <h3>会员卡充值</h3>
+    <form method="post" action="{{ url_for('card_recharge', cid=card.id) }}" class="stack">
+      <label>充值金额（元）<input type="number" name="amount" step="0.01" min="0.01" required></label>
+      <label>支付方式
+        <select name="method"><option>现金</option><option>微信</option><option>支付宝</option><option>银行卡</option><option>POS刷卡</option></select>
+      </label>
+      <label>备注 <input type="text" name="remark"></label>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">确认充值</button>
+        <button type="button" class="btn" onclick="document.getElementById('recharge-box').style.display='none'">取消</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="consume-box" class="modal-mask" style="display:none">
+  <div class="modal">
+    <h3>{{ '计次扣次' if card.card_type=='计次卡' else '储值扣款' }}</h3>
+    <form method="post" action="{{ url_for('card_consume', cid=card.id) }}" class="stack">
+      {% if card.card_type=='计次卡' %}
+      <input type="hidden" name="kind" value="扣次">
+      <label>扣除次数<input type="number" name="times" min="1" required></label>
+      {% else %}
+      <input type="hidden" name="kind" value="扣款">
+      <label>扣款金额（元）<input type="number" name="amount" step="0.01" min="0.01" required></label>
+      {% endif %}
+      <label>备注 <input type="text" name="remark"></label>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">确认</button>
+        <button type="button" class="btn" onclick="document.getElementById('consume-box').style.display='none'">取消</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h3>充值记录</h3>
+  <table>
+    <thead><tr><th>时间</th><th>金额</th><th>方式</th><th>操作人</th><th>备注</th></tr></thead>
+    <tbody>
+      {% for r in recharges %}
+      <tr><td>{{ r.created_at }}</td><td>+¥{{ '%.2f'|format(r.amount) }}</td><td>{{ r.method }}</td><td>{{ r.operator or '-' }}</td><td>{{ r.remark or '-' }}</td></tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">暂无充值记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>消费 / 扣次记录</h3>
+  <table>
+    <thead><tr><th>时间</th><th>类型</th><th>金额</th><th>次数</th><th>积分</th><th>备注</th></tr></thead>
+    <tbody>
+      {% for c in consumes %}
+      <tr>
+        <td>{{ c.created_at }}</td><td>{{ c.kind }}</td>
+        <td>{{ ('-¥%.2f'|format(c.amount)) if c.amount else '-' }}</td>
+        <td>{{ ('-%d'|format(c.times)) if c.times else '-' }}</td>
+        <td>{{ ('+%d'|format(c.points)) if c.points else '-' }}</td>
+        <td>{{ c.remark or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">暂无消费记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
