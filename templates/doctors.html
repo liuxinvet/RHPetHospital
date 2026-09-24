@@ -16,11 +16,12 @@
       <input type="text" name="title" placeholder="职称" style="width:120px">
       <input type="text" name="specialty" placeholder="专长" style="width:180px">
       <input type="text" name="phone" placeholder="电话" style="width:130px">
+      <input type="number" name="commission_rate" placeholder="提成率%" step="0.01" min="0" max="100" style="width:100px">
       <button class="btn btn-primary">添加</button>
     </form>
     {% if doctors %}
     <table>
-      <thead><tr><th>姓名</th><th>职称</th><th>专长</th><th>电话</th><th>状态</th><th>操作</th></tr></thead>
+      <thead><tr><th>姓名</th><th>职称</th><th>专长</th><th>电话</th><th>提成率</th><th>状态</th><th>操作</th></tr></thead>
       <tbody>
         {% for d in doctors %}
         <tr>
@@ -28,18 +29,20 @@
           <td>{{ d.title }}</td>
           <td>{{ d.specialty }}</td>
           <td>{{ d.phone }}</td>
+          <td>{{ '%.2f'|format(d.commission_rate or 0) }}%</td>
           <td>{% if d.status %}<span class="tag green">在职</span>{% else %}<span class="tag gray">离职</span>{% endif %}</td>
           <td class="actions">
             <button class="btn btn-xs" onclick="var f=document.getElementById('edit-{{ d.id }}');f.style.display=f.style.display==='none'?'':'none'">编辑</button>
           </td>
         </tr>
         <tr id="edit-{{ d.id }}" style="display:none">
-          <td colspan="6">
+          <td colspan="7">
             <form method="post" action="{{ url_for('doctor_edit', did=d.id) }}" class="form-inline-row">
               <input type="text" name="name" value="{{ d.name }}" required style="width:110px">
               <input type="text" name="title" value="{{ d.title }}" style="width:120px">
               <input type="text" name="specialty" value="{{ d.specialty }}" style="width:180px">
               <input type="text" name="phone" value="{{ d.phone }}" style="width:130px">
+              <input type="number" name="commission_rate" value="{{ d.commission_rate or 0 }}" step="0.01" min="0" max="100" style="width:100px">
               <label class="checkbox-line"><input type="checkbox" name="status" {{ 'checked' if d.status }}> 在职</label>
               <button class="btn btn-primary btn-sm">保存</button>
             </form>
