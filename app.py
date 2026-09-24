@@ -52,21 +52,28 @@ def get_setting(key, default=""):
         conn.close()
 
 
-def next_bill_no(prefix="RH", table="bills", date_col="bill_date"):
-    """生成单号：RH+YYYYMMDD+3位流水"""
+def next_bill_no(prefix="RH", table="bills", date_col="bill_date", no_col="bill_no"):
+    """生成单号：前缀+YYYYMMDD+3位流水（取当日最大号+1，删单后不撞号）"""
     conn = db.get_conn()
     try:
         d = date.today().strftime("%Y%m%d")
         row = conn.execute(
-            f"SELECT COUNT(*) c FROM {table} WHERE {date_col}=?", (today_str(),)
+            f"SELECT {no_col} FROM {table} WHERE {date_col}=? ORDER BY {no_col} DESC LIMIT 1",
+            (today_str(),),
         ).fetchone()
-        return f"{prefix}{d}{row['c'] + 1:03d}"
+        last = row[0] if row else ""
+        seq = int(last[len(prefix) + 8:]) + 1 if last.startswith(prefix + d) else 1
+        return f"{prefix}{d}{seq:03d}"
     finally:
         conn.close()
 
 
 def next_hos_no():
-    return next_bill_no(prefix="ZY", table="hospitalizations", date_col="in_date")
+    return next_bill_no(prefix="ZY", table="hospitalizations", date_col="in_date", no_col="hos_no")
+
+
+def next_foster_no():
+    return next_bill_no(prefix="F", table="foster_records", date_col="in_date", no_col="foster_no")
 
 
 # ======================= 登录与权限 =======================
@@ -162,6 +169,25 @@ def dashboard():
                 (today,),
             ).fetchone()["c"],
         }
+        stats["foster_active"] = conn.execute(
+            "SELECT COUNT(*) c FROM foster_records WHERE status='寄养中'"
+        ).fetchone()["c"]
+        stats["rv_today"] = conn.execute(
+            "SELECT COUNT(*) c FROM return_visits WHERE status='待回访' AND plan_date<=?",
+            (today,),
+        ).fetchone()["c"]
+        stats["pending_money"] = float(conn.execute(
+            "SELECT IFNULL(SUM(total-paid),0) s FROM bills WHERE status='未结清' AND method='挂账'"
+        ).fetchone()["s"] or 0)
+        stats["card_active"] = conn.execute(
+            "SELECT COUNT(*) c FROM member_cards WHERE status='正常'"
+        ).fetchone()["c"]
+        stats["card_balance"] = float(conn.execute(
+            "SELECT IFNULL(SUM(balance),0) s FROM member_cards WHERE status='正常'"
+        ).fetchone()["s"] or 0)
+        stats["stock_cost"] = float(conn.execute(
+            "SELECT IFNULL(SUM(stock*purchase_price),0) s FROM medicines WHERE status=1"
+        ).fetchone()["s"] or 0)
         today_appts = conn.execute(
             """SELECT a.*, p.name pet_name, p.species, o.name owner_name, o.phone owner_phone,
                       d.name doctor_name
@@ -172,6 +198,36 @@ def dashboard():
                WHERE a.appt_date=? ORDER BY a.appt_time, a.id""",
             (today,),
         ).fetchall()
+
+        # 寄养在养
+        foster_active = conn.execute(
+            "SELECT COUNT(*) c FROM foster_records WHERE status='寄养中'"
+        ).fetchone()["c"]
+        foster_list = conn.execute(
+            """SELECT f.*, p.name pet_name, p.species, o.name owner_name, o.phone owner_phone
+               FROM foster_records f JOIN pets p ON p.id=f.pet_id
+               JOIN owners o ON o.id=f.owner_id
+               WHERE f.status='寄养中' ORDER BY f.in_date LIMIT 8"""
+        ).fetchall()
+
+        # 回访提醒：今日到期 + 逾期未回访
+        rv_today = conn.execute(
+            "SELECT COUNT(*) c FROM return_visits WHERE status='待回访' AND plan_date<=?",
+            (today,),
+        ).fetchone()["c"]
+        rv_list = conn.execute(
+            """SELECT r.*, p.name pet_name, o.name owner_name, o.phone owner_phone
+               FROM return_visits r JOIN pets p ON p.id=r.pet_id
+               JOIN owners o ON o.id=r.owner_id
+               WHERE r.status='待回访' AND r.plan_date<=?
+               ORDER BY r.plan_date LIMIT 8""",
+            (today,),
+        ).fetchall()
+
+        # 未结清挂账
+        pending_money = conn.execute(
+            "SELECT IFNULL(SUM(total-paid),0) s FROM bills WHERE status='未结清' AND method='挂账'"
+        ).fetchone()["s"]
 
         low_stocks = conn.execute(
             """SELECT * FROM medicines WHERE status=1 AND stock<=low_stock
@@ -215,6 +271,7 @@ def dashboard():
         "dashboard.html", stats=stats, today_appts=today_appts,
         low_stocks=low_stocks, vaccine_alerts=vaccine_alerts,
         chart_days=days, on_duty=on_duty,
+        foster_list=foster_list, rv_list=rv_list,
     )
 
 
@@ -549,14 +606,16 @@ def appointment_new():
         fee = float(request.form.get("fee", 0) or get_setting("reg_fee", "20") or 0)
         conn.execute(
             """INSERT INTO appointments(pet_id,owner_id,doctor_id,appt_date,appt_time,
-               type,status,symptom,fee) VALUES(?,?,?,?,?,?,?,?,?)""",
+               time_type,type,status,symptom,remark,fee) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 int(pet_id), pet["owner_id"], doctor_id,
                 request.form.get("appt_date", today_str()),
                 request.form.get("appt_time", "").strip(),
+                request.form.get("time_type", "上午"),
                 request.form.get("type", "门诊"),
                 request.form.get("status", "待诊"),
                 request.form.get("symptom", "").strip(),
+                request.form.get("remark", "").strip(),
                 fee,
             ),
         )
@@ -597,6 +656,29 @@ def appointment_delete(aid):
 
 # ======================= 电子病历 =======================
 
+_RECORD_COLS = [
+    "chief_complaint", "examination", "diagnosis", "treatment", "follow_up",
+    "temperature", "weight", "breathe", "heartrate", "tongkong", "blood_pressure",
+    "chiefnote", "checknote", "carenote", "processnote", "physicalorder",
+    "conditionnote", "visitrecord", "surgical_record", "hospitalnode",
+    "feeding_method", "feeding_frequency", "food_changes",
+    "is_vaccine", "is_deworming", "previous_medical",
+    "mentality", "physical_condition_score", "muscle_score", "periodontal_score",
+    "eyes", "nose", "ears", "oral_cavity", "muscle", "skins", "nerve", "urology",
+    "heart_lung", "abdomen", "lymph_gland",
+    "skin_elasticity", "eye_condition", "oral_mucosa", "crt",
+    "suspected_illness", "again_visit_num", "open_appointment", "appointment_time",
+]
+
+
+def _record_form_values():
+    """从表单提取病历全部字段"""
+    vals = {}
+    for col in _RECORD_COLS:
+        vals[col] = request.form.get(col, "").strip()
+    return vals
+
+
 @app.route("/records")
 @login_required
 def records():
@@ -627,22 +709,33 @@ def record_new():
     conn = db.get_conn()
     try:
         if request.method == "POST":
+            vals = _record_form_values()
             conn.execute(
                 """INSERT INTO medical_records(pet_id,appointment_id,doctor_id,record_date,
-                   chief_complaint,examination,diagnosis,treatment,follow_up)
-                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                   chief_complaint,examination,diagnosis,treatment,follow_up,
+                   temperature,weight,breathe,heartrate,tongkong,blood_pressure,
+                   chiefnote,checknote,carenote,processnote,physicalorder,
+                   conditionnote,visitrecord,surgical_record,hospitalnode,
+                   feeding_method,feeding_frequency,food_changes,
+                   is_vaccine,is_deworming,previous_medical,
+                   mentality,physical_condition_score,muscle_score,periodontal_score,
+                   eyes,nose,ears,oral_cavity,muscle,skins,nerve,urology,
+                   heart_lung,abdomen,lymph_gland,
+                   skin_elasticity,eye_condition,oral_mucosa,crt,
+                   suspected_illness,again_visit_num,open_appointment,appointment_time)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     int(request.form.get("pet_id", 0)),
                     request.form.get("appointment_id") or None,
                     request.form.get("doctor_id") or None,
                     request.form.get("record_date", today_str()),
-                    request.form.get("chief_complaint", "").strip(),
-                    request.form.get("examination", "").strip(),
-                    request.form.get("diagnosis", "").strip(),
-                    request.form.get("treatment", "").strip(),
-                    request.form.get("follow_up", "").strip(),
+                    *[vals[c] for c in _RECORD_COLS],
                 ),
             )
+            # 若从预约就诊进入：预约状态置为已完成
+            aid = request.form.get("appointment_id")
+            if aid:
+                conn.execute("UPDATE appointments SET status='已完成' WHERE id=?", (int(aid),))
             conn.commit()
             flash("病历已保存", "success")
             return redirect(url_for("records"))
@@ -669,18 +762,11 @@ def record_edit(rid):
     try:
         record = conn.execute("SELECT * FROM medical_records WHERE id=?", (rid,)).fetchone()
         if request.method == "POST":
+            vals = _record_form_values()
+            set_clause = ", ".join([f"{c}=?" for c in ["record_date"] + _RECORD_COLS])
             conn.execute(
-                """UPDATE medical_records SET record_date=?,chief_complaint=?,examination=?,
-                   diagnosis=?,treatment=?,follow_up=? WHERE id=?""",
-                (
-                    request.form.get("record_date", today_str()),
-                    request.form.get("chief_complaint", "").strip(),
-                    request.form.get("examination", "").strip(),
-                    request.form.get("diagnosis", "").strip(),
-                    request.form.get("treatment", "").strip(),
-                    request.form.get("follow_up", "").strip(),
-                    rid,
-                ),
+                f"UPDATE medical_records SET {set_clause} WHERE id=?",
+                ([request.form.get("record_date", today_str())] + [vals[c] for c in _RECORD_COLS] + [rid]),
             )
             conn.commit()
             flash("病历已更新", "success")
@@ -691,7 +777,7 @@ def record_edit(rid):
         flash("未找到该病历", "warning")
         return redirect(url_for("records"))
     return render_template(
-        "record_edit.html", record=record, title="编辑病历",
+        "record_form.html", record=record, title="编辑病历",
     )
 
 
@@ -1017,18 +1103,33 @@ def billing_new():
             owner_id = request.form.get("owner_id", "") or None
             method = request.form.get("method", "现金")
             remark = request.form.get("remark", "").strip()
+            sale_emp_id = request.form.get("sale_employee_id", "") or None
+            service_emp_id = request.form.get("service_employee_id", "") or None
+            card_id = request.form.get("card_id", "") or None
             names = request.form.getlist("item_name[]")
             types = request.form.getlist("item_type[]")
             qtys = request.form.getlist("qty[]")
             prices = request.form.getlist("price[]")
+            member_prices = request.form.getlist("member_price[]")
+            member_flags = request.form.getlist("is_member_price[]")
             if not any(n for n in names if n.strip()):
                 flash("请至少添加一项收费明细", "warning")
                 return redirect(url_for("billing_new"))
             bill_no = next_bill_no()
+            sale_emp_name = ""
+            service_emp_name = ""
+            if sale_emp_id:
+                row = conn.execute("SELECT name FROM doctors WHERE id=?", (sale_emp_id,)).fetchone()
+                sale_emp_name = row["name"] if row else ""
+            if service_emp_id:
+                row = conn.execute("SELECT name FROM doctors WHERE id=?", (service_emp_id,)).fetchone()
+                service_emp_name = row["name"] if row else ""
             cur = conn.execute(
-                """INSERT INTO bills(bill_no,owner_id,pet_id,bill_date,method,status,remark)
-                   VALUES(?,?,?,?,?,?,?)""",
-                (bill_no, owner_id, pet_id, today_str(), method, "未结清", remark),
+                """INSERT INTO bills(bill_no,owner_id,pet_id,bill_date,method,status,
+                   sale_employee_id,sale_employee_name,service_employee_id,service_employee_name,remark)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                (bill_no, owner_id, pet_id, today_str(), method, "未结清",
+                 sale_emp_id, sale_emp_name, service_emp_id, service_emp_name, remark),
             )
             bill_id = cur.lastrowid
             total = 0
@@ -1037,16 +1138,46 @@ def billing_new():
                     continue
                 qty = int(qtys[i] or 1)
                 price = float(prices[i] or 0)
+                mflag = 1 if (i < len(member_flags) and member_flags[i]) else 0
+                if mflag and i < len(member_prices) and member_prices[i]:
+                    price = float(member_prices[i] or 0)
                 sub = round(price * qty, 2)
                 total += sub
                 conn.execute(
-                    """INSERT INTO bill_items(bill_id,item_type,name,qty,price,subtotal)
-                       VALUES(?,?,?,?,?,?)""",
-                    (bill_id, types[i] if i < len(types) else "其他", n.strip(), qty, price, sub),
+                    """INSERT INTO bill_items(bill_id,item_type,name,qty,price,subtotal,is_member_price)
+                       VALUES(?,?,?,?,?,?,?)""",
+                    (bill_id, types[i] if i < len(types) else "其他", n.strip(), qty, price, sub, mflag),
                 )
             conn.execute("UPDATE bills SET total=? WHERE id=?", (round(total, 2), bill_id))
+            # 储值卡支付：扣余额、记积分、写消费流水
+            if card_id:
+                card = conn.execute(
+                    "SELECT * FROM member_cards WHERE id=?", (card_id,)
+                ).fetchone()
+                if not card or card["status"] != "正常" or card["card_type"] != "储值卡":
+                    conn.rollback()
+                    flash("会员卡不可用或未开通储值", "danger")
+                    return redirect(url_for("billing_new"))
+                if float(card["balance"] or 0) < total:
+                    conn.rollback()
+                    flash(f"会员卡余额不足（余额 {card['balance']:.2f}，需 {total:.2f}）", "danger")
+                    return redirect(url_for("billing_new"))
+                conn.execute(
+                    """UPDATE member_cards SET balance=balance-?, points=points+?,
+                       total_consume=total_consume+? WHERE id=?""",
+                    (total, int(total), total, card_id),
+                )
+                conn.execute(
+                    """INSERT INTO card_consumes(card_id,bill_id,kind,amount,points,consume_date,remark)
+                       VALUES(?,?,?,?,?,?,?)""",
+                    (card_id, bill_id, "储值扣款", total, int(total), today_str(), f"收费单 {bill_no}"),
+                )
+                conn.execute(
+                    "UPDATE bills SET method='储值卡', paid=?, status='已结清' WHERE id=?",
+                    (round(total, 2), bill_id),
+                )
             conn.commit()
-            flash(f"收费单 {bill_no} 已创建", "success")
+            flash(f"收费单 {bill_no} 已创建" + ("，储值卡支付成功" if card_id else ""), "success")
             return redirect(url_for("bill_detail", bid=bill_id))
         pets_rows = conn.execute(
             """SELECT p.id, p.name, p.species, o.id owner_id, o.name owner_name
@@ -1057,9 +1188,20 @@ def billing_new():
                FROM prescriptions pr JOIN pets p ON p.id=pr.pet_id
                JOIN owners o ON o.id=p.owner_id ORDER BY pr.id DESC LIMIT 20"""
         ).fetchall()
+        doctors_rows = conn.execute(
+            "SELECT id, name, title FROM doctors WHERE status=1 ORDER BY name"
+        ).fetchall()
+        cards_rows = conn.execute(
+            """SELECT c.id, c.card_no, c.card_name, c.balance, c.points, c.status,
+                      o.name owner_name
+               FROM member_cards c JOIN owners o ON o.id=c.owner_id
+               WHERE c.status='正常' AND c.card_type='储值卡'
+               ORDER BY c.id DESC LIMIT 50"""
+        ).fetchall()
     finally:
         conn.close()
-    return render_template("billing_form.html", pets=pets_rows, pres=pres_rows)
+    return render_template("billing_form.html", pets=pets_rows, pres=pres_rows,
+                           doctors=doctors_rows, cards=cards_rows)
 
 
 @app.route("/billing/<int:bid>")
@@ -1397,12 +1539,13 @@ def doctor_new():
     conn = db.get_conn()
     try:
         conn.execute(
-            "INSERT INTO doctors(name,title,specialty,phone) VALUES(?,?,?,?)",
+            "INSERT INTO doctors(name,title,specialty,phone,commission_rate) VALUES(?,?,?,?,?)",
             (
                 request.form.get("name", "").strip(),
                 request.form.get("title", "").strip(),
                 request.form.get("specialty", "").strip(),
                 request.form.get("phone", "").strip(),
+                float(request.form.get("commission_rate", 0) or 0),
             ),
         )
         conn.commit()
@@ -1418,12 +1561,13 @@ def doctor_edit(did):
     conn = db.get_conn()
     try:
         conn.execute(
-            "UPDATE doctors SET name=?,title=?,specialty=?,phone=?,status=? WHERE id=?",
+            "UPDATE doctors SET name=?,title=?,specialty=?,phone=?,commission_rate=?,status=? WHERE id=?",
             (
                 request.form.get("name", "").strip(),
                 request.form.get("title", "").strip(),
                 request.form.get("specialty", "").strip(),
                 request.form.get("phone", "").strip(),
+                float(request.form.get("commission_rate", 0) or 0),
                 1 if request.form.get("status") else 0,
                 did,
             ),
@@ -1568,6 +1712,768 @@ def user_toggle(uid):
     finally:
         conn.close()
     return redirect(url_for("settings"))
+
+
+# ======================= 寄养管理 =======================
+
+@app.route("/fosters")
+@login_required
+def fosters():
+    status = request.args.get("status", "")
+    conn = db.get_conn()
+    try:
+        sql = """SELECT f.*, p.name pet_name, p.species, p.gender, o.name owner_name, o.phone owner_phone,
+                        (julianday(date('now','localtime')) - julianday(f.in_date)) + 1 AS stay_days
+                 FROM foster_records f JOIN pets p ON p.id=f.pet_id
+                 JOIN owners o ON o.id=f.owner_id WHERE 1=1"""
+        args = []
+        if status:
+            sql += " AND f.status=?"
+            args.append(status)
+        sql += " ORDER BY f.status='寄养中' DESC, f.in_date DESC LIMIT 200"
+        rows = conn.execute(sql, args).fetchall()
+        doctors_rows = conn.execute("SELECT * FROM doctors WHERE status=1 ORDER BY name").fetchall()
+        pets_rows = conn.execute(
+            """SELECT p.id, p.name, p.species, o.id owner_id, o.name owner_name
+               FROM pets p JOIN owners o ON o.id=p.owner_id
+               WHERE p.id NOT IN (SELECT pet_id FROM foster_records WHERE status='寄养中')
+               ORDER BY p.id DESC"""
+        ).fetchall()
+    finally:
+        conn.close()
+    return render_template("fosters.html", fosters=rows, status=status,
+                           doctors=doctors_rows, pets=pets_rows,
+                           today=today_str())
+
+
+@app.route("/fosters/new", methods=["POST"])
+@login_required
+def foster_new():
+    pet_id = request.form.get("pet_id", "")
+    if not pet_id:
+        flash("请选择宠物", "warning")
+        return redirect(url_for("fosters"))
+    conn = db.get_conn()
+    try:
+        pet = conn.execute("SELECT * FROM pets WHERE id=?", (pet_id,)).fetchone()
+        if not pet:
+            flash("未找到该宠物", "danger")
+            return redirect(url_for("fosters"))
+        daily = float(request.form.get("daily_fee", 0) or 0)
+        deposit = float(request.form.get("deposit", 0) or 0)
+        conn.execute(
+            """INSERT INTO foster_records(foster_no,pet_id,owner_id,in_date,daily_fee,deposit,reason,status,remark)
+               VALUES(?,?,?,?,?,?,?,?,?)""",
+            (next_foster_no(), int(pet_id), pet["owner_id"],
+             request.form.get("in_date", today_str()), daily, deposit,
+             request.form.get("reason", "").strip(), "寄养中",
+             request.form.get("remark", "").strip()),
+        )
+        conn.commit()
+        flash("寄养登记成功", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("fosters"))
+
+
+@app.route("/fosters/<int:fid>/finish", methods=["POST"])
+@login_required
+def foster_finish(fid):
+    """结束寄养：按在养天数结算费用，并可一键生成收费单"""
+    conn = db.get_conn()
+    try:
+        foster = conn.execute("SELECT * FROM foster_records WHERE id=?", (fid,)).fetchone()
+        if not foster:
+            flash("未找到寄养记录", "danger")
+            return redirect(url_for("fosters"))
+        if foster["status"] != "寄养中":
+            flash("该记录已结束", "warning")
+            return redirect(url_for("fosters"))
+        out_date = request.form.get("out_date", today_str())
+        days = int((date.fromisoformat(out_date) - date.fromisoformat(foster["in_date"])).days) + 1
+        if days < 1:
+            days = 1
+        total = round(days * foster["daily_fee"], 2)
+        to_bill = request.form.get("to_bill", "1") == "1"
+        conn.execute(
+            "UPDATE foster_records SET out_date=?, total_fee=?, status='已结束' WHERE id=?",
+            (out_date, total, fid),
+        )
+        if to_bill and total > 0:
+            bill_no = next_bill_no()
+            cur = conn.execute(
+                """INSERT INTO bills(bill_no,owner_id,pet_id,bill_date,method,status,remark)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (bill_no, foster["owner_id"], foster["pet_id"], today_str(), "现金", "未结清",
+                 f"寄养结算 {foster['foster_no']} {days}天"),
+            )
+            bill_id = cur.lastrowid
+            conn.execute(
+                """INSERT INTO bill_items(bill_id,item_type,name,qty,price,subtotal)
+                   VALUES(?,?,?,?,?,?)""",
+                (bill_id, "寄养费", f"寄养 {days} 天", 1, total, total),
+            )
+            conn.execute("UPDATE bills SET total=? WHERE id=?", (total, bill_id))
+            conn.commit()
+            flash(f"寄养已结束，结算 {total} 元，收费单已生成", "success")
+            return redirect(url_for("bill_detail", bid=bill_id))
+        conn.commit()
+        flash(f"寄养已结束，结算 {total} 元", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("fosters"))
+
+
+@app.route("/fosters/<int:fid>/delete", methods=["POST"])
+@login_required
+@role_required("frontdesk")
+def foster_delete(fid):
+    conn = db.get_conn()
+    try:
+        conn.execute("DELETE FROM foster_records WHERE id=?", (fid,))
+        conn.commit()
+        flash("寄养记录已删除", "success")
+    finally:
+        conn.close()
+    return redirect(request.referrer or url_for("fosters"))
+
+
+# ======================= 回访管理 =======================
+
+@app.route("/return_visits")
+@login_required
+def return_visits():
+    status = request.args.get("status", "")
+    conn = db.get_conn()
+    try:
+        sql = """SELECT r.*, p.name pet_name, p.species, o.name owner_name, o.phone owner_phone,
+                        d.name doctor_name
+                 FROM return_visits r JOIN pets p ON p.id=r.pet_id
+                 JOIN owners o ON o.id=r.owner_id
+                 LEFT JOIN doctors d ON d.id=r.main_employee_id WHERE 1=1"""
+        args = []
+        if status:
+            sql += " AND r.status=?"
+            args.append(status)
+        sql += " ORDER BY r.status='待回访' DESC, r.plan_date LIMIT 300"
+        rows = conn.execute(sql, args).fetchall()
+        pets_rows = conn.execute(
+            """SELECT p.id, p.name, p.species, o.id owner_id, o.name owner_name, o.phone
+               FROM pets p JOIN owners o ON o.id=p.owner_id ORDER BY p.id DESC LIMIT 100"""
+        ).fetchall()
+        doctors_rows = conn.execute("SELECT * FROM doctors WHERE status=1 ORDER BY name").fetchall()
+    finally:
+        conn.close()
+    return render_template("return_visits.html", visits=rows, status=status,
+                           pets=pets_rows, doctors=doctors_rows,
+                           today=today_str())
+
+
+@app.route("/return_visits/new", methods=["POST"])
+@login_required
+def return_visit_new():
+    pet_id = request.form.get("pet_id", "")
+    if not pet_id:
+        flash("请选择宠物", "warning")
+        return redirect(url_for("return_visits"))
+    conn = db.get_conn()
+    try:
+        pet = conn.execute("SELECT * FROM pets WHERE id=?", (pet_id,)).fetchone()
+        if not pet:
+            flash("未找到该宠物", "danger")
+            return redirect(url_for("return_visits"))
+        conn.execute(
+            """INSERT INTO return_visits(pet_id,owner_id,record_id,plan_date,visit_type,
+               status,main_employee_id,diagnosis,remark)
+               VALUES(?,?,?,?,?,?,?,?,?)""",
+            (int(pet_id), pet["owner_id"],
+             request.form.get("record_id") or None,
+             request.form.get("plan_date", today_str()),
+             request.form.get("visit_type", "电话"),
+             request.form.get("status", "待回访"),
+             request.form.get("main_employee_id") or None,
+             request.form.get("diagnosis", "").strip(),
+             request.form.get("remark", "").strip()),
+        )
+        conn.commit()
+        flash("回访计划已登记", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("return_visits"))
+
+
+@app.route("/return_visits/<int:vid>/done", methods=["POST"])
+@login_required
+def return_visit_done(vid):
+    conn = db.get_conn()
+    try:
+        conn.execute(
+            """UPDATE return_visits SET status='已回访', actual_date=?, visit_result=?
+               WHERE id=?""",
+            (request.form.get("actual_date", today_str()),
+             request.form.get("visit_result", "").strip(), vid),
+        )
+        conn.commit()
+        flash("回访已完成", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("return_visits"))
+
+
+@app.route("/return_visits/<int:vid>/skip", methods=["POST"])
+@login_required
+def return_visit_skip(vid):
+    conn = db.get_conn()
+    try:
+        conn.execute("UPDATE return_visits SET status='无需回访' WHERE id=?", (vid,))
+        conn.commit()
+        flash("已标记无需回访", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("return_visits"))
+
+
+@app.route("/return_visits/<int:vid>/delete", methods=["POST"])
+@login_required
+@role_required("frontdesk")
+def return_visit_delete(vid):
+    conn = db.get_conn()
+    try:
+        conn.execute("DELETE FROM return_visits WHERE id=?", (vid,))
+        conn.commit()
+        flash("回访记录已删除", "success")
+    finally:
+        conn.close()
+    return redirect(request.referrer or url_for("return_visits"))
+
+
+# ======================= 会员卡 =======================
+
+def next_card_no():
+    prefix = "MC" + date.today().strftime("%Y%m%d")
+    conn = db.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT card_no FROM member_cards WHERE card_no LIKE ? ORDER BY card_no DESC LIMIT 1",
+            (prefix + "%",),
+        ).fetchone()
+        last = row["card_no"] if row else ""
+        seq = int(last[len(prefix):]) + 1 if last.startswith(prefix) else 1
+        return f"{prefix}{seq:04d}"
+    finally:
+        conn.close()
+
+
+@app.route("/cards")
+@login_required
+def cards():
+    kw = request.args.get("kw", "").strip()
+    status = request.args.get("status", "")
+    conn = db.get_conn()
+    try:
+        sql = """SELECT c.*, o.name owner_name, o.phone owner_phone
+                 FROM member_cards c JOIN owners o ON o.id=c.owner_id WHERE 1=1"""
+        args = []
+        if kw:
+            sql += " AND (c.card_no LIKE ? OR c.card_name LIKE ? OR o.name LIKE ? OR o.phone LIKE ?)"
+            args += [f"%{kw}%"] * 4
+        if status:
+            sql += " AND c.status=?"
+            args.append(status)
+        sql += " ORDER BY c.id DESC LIMIT 200"
+        rows = conn.execute(sql, args).fetchall()
+        active = conn.execute(
+            "SELECT COUNT(*) c FROM member_cards WHERE status='正常'"
+        ).fetchone()["c"]
+        total_balance = conn.execute(
+            "SELECT IFNULL(SUM(balance),0) s FROM member_cards WHERE status='正常'"
+        ).fetchone()["s"]
+        month_recharge = conn.execute(
+            """SELECT IFNULL(SUM(amount),0) s FROM card_recharges
+               WHERE strftime('%Y-%m', recharge_date)=strftime('%Y-%m','now','localtime')"""
+        ).fetchone()["s"]
+    finally:
+        conn.close()
+    return render_template("cards.html", cards=rows, kw=kw, status=status,
+                           active=active, total_balance=total_balance,
+                           month_recharge=month_recharge)
+
+
+@app.route("/cards/new", methods=["GET", "POST"])
+@login_required
+@role_required("frontdesk")
+def card_new():
+    conn = db.get_conn()
+    try:
+        if request.method == "POST":
+            owner_id = request.form.get("owner_id", "")
+            card_type = request.form.get("card_type", "储值卡")
+            card_name = request.form.get("card_name", "").strip()
+            discount = float(request.form.get("discount", 1) or 1)
+            remark = request.form.get("remark", "").strip()
+            if not owner_id:
+                flash("请选择宠物主", "warning")
+                return redirect(url_for("card_new"))
+            card_no = next_card_no()
+            cur = conn.execute(
+                """INSERT INTO member_cards(card_no,owner_id,card_type,card_name,discount,remark)
+                   VALUES(?,?,?,?,?,?)""",
+                (card_no, owner_id, card_type, card_name, discount, remark),
+            )
+            cid = cur.lastrowid
+            if card_type == "储值卡":
+                amount = float(request.form.get("amount", 0) or 0)
+                if amount > 0:
+                    conn.execute(
+                        """UPDATE member_cards SET balance=balance+?, points=points+?,
+                           total_recharge=total_recharge+? WHERE id=?""",
+                        (amount, int(amount), amount, cid),
+                    )
+                    conn.execute(
+                        """INSERT INTO card_recharges(card_id,amount,method,operator,remark)
+                           VALUES(?,?,?,?,?)""",
+                        (cid, amount, "现金", session.get("real_name", ""), "开卡充值"),
+                    )
+            else:
+                times = int(request.form.get("times", 0) or 0)
+                if times > 0:
+                    conn.execute(
+                        "UPDATE member_cards SET times_left=times_left+? WHERE id=?",
+                        (times, cid),
+                    )
+            conn.commit()
+            flash(f"会员卡 {card_no} 开卡成功", "success")
+            return redirect(url_for("card_detail", cid=cid))
+        owners_rows = conn.execute(
+            "SELECT id, name, phone FROM owners ORDER BY name"
+        ).fetchall()
+    finally:
+        conn.close()
+    return render_template("card_form.html", owners=owners_rows)
+
+
+@app.route("/cards/<int:cid>")
+@login_required
+def card_detail(cid):
+    conn = db.get_conn()
+    try:
+        card = conn.execute(
+            """SELECT c.*, o.name owner_name, o.phone owner_phone
+               FROM member_cards c JOIN owners o ON o.id=c.owner_id WHERE c.id=?""",
+            (cid,),
+        ).fetchone()
+        if not card:
+            flash("未找到该会员卡", "warning")
+            return redirect(url_for("cards"))
+        recharges = conn.execute(
+            "SELECT * FROM card_recharges WHERE card_id=? ORDER BY id DESC LIMIT 100",
+            (cid,),
+        ).fetchall()
+        consumes = conn.execute(
+            "SELECT * FROM card_consumes WHERE card_id=? ORDER BY id DESC LIMIT 100",
+            (cid,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return render_template("card_detail.html", card=card, recharges=recharges,
+                           consumes=consumes)
+
+
+@app.route("/cards/<int:cid>/recharge", methods=["POST"])
+@login_required
+@role_required("frontdesk")
+def card_recharge(cid):
+    conn = db.get_conn()
+    try:
+        card = conn.execute("SELECT * FROM member_cards WHERE id=?", (cid,)).fetchone()
+        if not card:
+            flash("未找到该会员卡", "danger")
+            return redirect(url_for("cards"))
+        amount = float(request.form.get("amount", 0) or 0)
+        method = request.form.get("method", "现金")
+        if amount <= 0:
+            flash("充值金额需大于 0", "warning")
+            return redirect(url_for("card_detail", cid=cid))
+        conn.execute(
+            """UPDATE member_cards SET balance=balance+?, points=points+?,
+               total_recharge=total_recharge+? WHERE id=?""",
+            (amount, int(amount), amount, cid),
+        )
+        conn.execute(
+            """INSERT INTO card_recharges(card_id,amount,method,operator,remark)
+               VALUES(?,?,?,?,?)""",
+            (cid, amount, method, session.get("real_name", ""),
+             request.form.get("remark", "").strip()),
+        )
+        conn.commit()
+        flash(f"充值 {amount:.2f} 元成功", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("card_detail", cid=cid))
+
+
+@app.route("/cards/<int:cid>/consume", methods=["POST"])
+@login_required
+@role_required("frontdesk")
+def card_consume(cid):
+    conn = db.get_conn()
+    try:
+        card = conn.execute("SELECT * FROM member_cards WHERE id=?", (cid,)).fetchone()
+        if not card:
+            flash("未找到该会员卡", "danger")
+            return redirect(url_for("cards"))
+        kind = request.form.get("kind", "")
+        if kind == "扣次":
+            times = int(request.form.get("times", 0) or 0)
+            if times <= 0:
+                flash("扣除次数需大于 0", "warning")
+                return redirect(url_for("card_detail", cid=cid))
+            if times > card["times_left"]:
+                flash("卡内剩余次数不足", "danger")
+                return redirect(url_for("card_detail", cid=cid))
+            conn.execute(
+                "UPDATE member_cards SET times_left=times_left-? WHERE id=?",
+                (times, cid),
+            )
+            conn.execute(
+                """INSERT INTO card_consumes(card_id,kind,times,consume_date,remark)
+                   VALUES(?,?,?,?,?)""",
+                (cid, kind, times, today_str(), request.form.get("remark", "").strip()),
+            )
+        else:
+            amount = float(request.form.get("amount", 0) or 0)
+            if amount <= 0:
+                flash("扣款金额需大于 0", "warning")
+                return redirect(url_for("card_detail", cid=cid))
+            if amount > card["balance"]:
+                flash("卡内余额不足", "danger")
+                return redirect(url_for("card_detail", cid=cid))
+            conn.execute(
+                """UPDATE member_cards SET balance=balance-?, total_consume=total_consume+?
+                   WHERE id=?""",
+                (amount, amount, cid),
+            )
+            conn.execute(
+                """INSERT INTO card_consumes(card_id,kind,amount,consume_date,remark)
+                   VALUES(?,?,?,?,?)""",
+                (cid, kind, amount, today_str(), request.form.get("remark", "").strip()),
+            )
+        conn.commit()
+        flash("操作成功", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("card_detail", cid=cid))
+
+
+@app.route("/cards/<int:cid>/toggle", methods=["POST"])
+@login_required
+@role_required("frontdesk")
+def card_toggle(cid):
+    conn = db.get_conn()
+    try:
+        card = conn.execute("SELECT * FROM member_cards WHERE id=?", (cid,)).fetchone()
+        if not card:
+            flash("未找到该会员卡", "danger")
+            return redirect(url_for("cards"))
+        new_status = "停用" if card["status"] == "正常" else "正常"
+        conn.execute("UPDATE member_cards SET status=? WHERE id=?", (new_status, cid))
+        conn.commit()
+        flash(f"会员卡已{new_status}", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("card_detail", cid=cid))
+
+
+@app.route("/cards/<int:cid>/delete", methods=["POST"])
+@login_required
+@role_required("frontdesk")
+def card_delete(cid):
+    conn = db.get_conn()
+    try:
+        conn.execute("DELETE FROM card_consumes WHERE card_id=?", (cid,))
+        conn.execute("DELETE FROM card_recharges WHERE card_id=?", (cid,))
+        conn.execute("DELETE FROM member_cards WHERE id=?", (cid,))
+        conn.commit()
+        flash("会员卡已删除", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("cards"))
+
+
+# ======================= 库存单据（采购入库/出库/报损） =======================
+
+def next_stock_no():
+    prefix = "ST" + date.today().strftime("%Y%m%d")
+    conn = db.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT bill_no FROM stock_bills WHERE bill_no LIKE ? ORDER BY bill_no DESC LIMIT 1",
+            (prefix + "%",),
+        ).fetchone()
+        last = row["bill_no"] if row else ""
+        seq = int(last[len(prefix):]) + 1 if last.startswith(prefix) else 1
+        return f"{prefix}{seq:04d}"
+    finally:
+        conn.close()
+
+
+@app.route("/stock_bills")
+@login_required
+def stock_bills():
+    btype = request.args.get("type", "")
+    conn = db.get_conn()
+    try:
+        sql = "SELECT * FROM stock_bills WHERE 1=1"
+        args = []
+        if btype:
+            sql += " AND bill_type=?"
+            args.append(btype)
+        sql += " ORDER BY id DESC LIMIT 200"
+        rows = conn.execute(sql, args).fetchall()
+    finally:
+        conn.close()
+    return render_template("stock_bills.html", bills=rows, btype=btype)
+
+
+@app.route("/stock_bills/new", methods=["GET", "POST"])
+@login_required
+@role_required("frontdesk")
+def stock_bill_new():
+    conn = db.get_conn()
+    try:
+        if request.method == "POST":
+            bill_type = request.form.get("bill_type", "采购入库")
+            supplier = request.form.get("supplier", "").strip()
+            bill_date = request.form.get("bill_date", today_str())
+            remark = request.form.get("remark", "").strip()
+            mids = request.form.getlist("medicine_id[]")
+            qtys = request.form.getlist("qty[]")
+            prices = request.form.getlist("price[]")
+            items = []
+            for i, mid in enumerate(mids):
+                if not mid:
+                    continue
+                qty = int(qtys[i] or 0)
+                if qty == 0:
+                    continue
+                if bill_type in ("采购入库", "其他入库"):
+                    eff = qty
+                else:
+                    eff = -abs(qty)
+                price = float(prices[i] or 0)
+                items.append((int(mid), eff, price, round(price * abs(qty), 2)))
+            if not items:
+                flash("请至少添加一条药品明细", "warning")
+                return redirect(url_for("stock_bill_new"))
+            bill_no = next_stock_no()
+            total = sum(it[3] for it in items)
+            cur = conn.execute(
+                """INSERT INTO stock_bills(bill_no,bill_type,supplier,total_amount,bill_date,operator,remark)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (bill_no, bill_type, supplier, total, bill_date,
+                 session.get("real_name", ""), remark),
+            )
+            bid = cur.lastrowid
+            for mid, eff, price, amount in items:
+                conn.execute(
+                    """INSERT INTO stock_bill_items(bill_id,medicine_id,qty,price,amount)
+                       VALUES(?,?,?,?,?)""",
+                    (bid, mid, eff, price, amount),
+                )
+                conn.execute(
+                    "UPDATE medicines SET stock=MAX(0, stock+?) WHERE id=?", (eff, mid)
+                )
+            conn.commit()
+            flash(f"库存单据 {bill_no} 已保存，库存已更新", "success")
+            return redirect(url_for("stock_bill_detail", bid=bid))
+        meds = conn.execute(
+            "SELECT id, name, spec, unit, sale_price, stock FROM medicines WHERE status=1 ORDER BY name"
+        ).fetchall()
+        cats = conn.execute("SELECT id, name FROM medicine_categories ORDER BY name").fetchall()
+    finally:
+        conn.close()
+    return render_template("stock_bill_form.html", meds=meds, cats=cats, today=today_str())
+
+
+@app.route("/stock_bills/<int:bid>")
+@login_required
+def stock_bill_detail(bid):
+    conn = db.get_conn()
+    try:
+        bill = conn.execute("SELECT * FROM stock_bills WHERE id=?", (bid,)).fetchone()
+        if not bill:
+            flash("未找到该单据", "warning")
+            return redirect(url_for("stock_bills"))
+        items = conn.execute(
+            """SELECT s.*, m.name med_name, m.spec, m.unit FROM stock_bill_items s
+               JOIN medicines m ON m.id=s.medicine_id WHERE s.bill_id=? ORDER BY s.id""",
+            (bid,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return render_template("stock_bill_detail.html", bill=bill, items=items)
+
+
+@app.route("/stock_bills/<int:bid>/delete", methods=["POST"])
+@login_required
+@role_required("frontdesk")
+def stock_bill_delete(bid):
+    conn = db.get_conn()
+    try:
+        bill = conn.execute("SELECT * FROM stock_bills WHERE id=?", (bid,)).fetchone()
+        if not bill:
+            flash("未找到该单据", "danger")
+            return redirect(url_for("stock_bills"))
+        items = conn.execute(
+            "SELECT * FROM stock_bill_items WHERE bill_id=?", (bid,)
+        ).fetchall()
+        for it in items:
+            # 回滚库存：入库单回滚为减，出库/报损单回滚为加
+            conn.execute(
+                "UPDATE medicines SET stock=MAX(0, stock-?) WHERE id=?", (it["qty"], it["medicine_id"])
+            )
+        conn.execute("DELETE FROM stock_bill_items WHERE bill_id=?", (bid,))
+        conn.execute("DELETE FROM stock_bills WHERE id=?", (bid,))
+        conn.commit()
+        flash(f"单据 {bill['bill_no']} 已删除，库存已回滚", "success")
+    finally:
+        conn.close()
+    return redirect(url_for("stock_bills"))
+
+
+# ======================= 库存盘点 =======================
+
+@app.route("/stock_check", methods=["GET", "POST"])
+@login_required
+@role_required("frontdesk")
+def stock_check():
+    conn = db.get_conn()
+    try:
+        if request.method == "POST":
+            mids = request.form.getlist("mid[]")
+            actuals = request.form.getlist("actual[]")
+            diffs = []
+            for i, mid in enumerate(mids):
+                if not mid:
+                    continue
+                med = conn.execute("SELECT * FROM medicines WHERE id=?", (mid,)).fetchone()
+                if not med:
+                    continue
+                try:
+                    actual = int(actuals[i] or 0)
+                except ValueError:
+                    actual = 0
+                diff = actual - med["stock"]
+                if diff != 0:
+                    diffs.append((int(mid), diff, med["purchase_price"]))
+            if not diffs:
+                flash("盘点结果与账面一致，无需调整", "success")
+                return redirect(url_for("stock_check"))
+            bill_no = next_stock_no()
+            total = sum(abs(d[1]) * d[2] for d in diffs)
+            cur = conn.execute(
+                """INSERT INTO stock_bills(bill_no,bill_type,supplier,total_amount,bill_date,operator,remark)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (bill_no, "盘点调整", "盘点", round(total, 2), today_str(),
+                 session.get("real_name", ""), "库存盘点自动调整"),
+            )
+            bid = cur.lastrowid
+            for mid, diff, price in diffs:
+                conn.execute(
+                    """INSERT INTO stock_bill_items(bill_id,medicine_id,qty,price,amount)
+                       VALUES(?,?,?,?,?)""",
+                    (bid, mid, diff, price, round(abs(diff) * price, 2)),
+                )
+                conn.execute(
+                    "UPDATE medicines SET stock=MAX(0, stock+?) WHERE id=?", (diff, mid)
+                )
+            conn.commit()
+            flash(f"盘点完成，差异 {len(diffs)} 项已生成调整单 {bill_no}", "success")
+            return redirect(url_for("stock_bill_detail", bid=bid))
+        meds = conn.execute(
+            """SELECT m.*, c.name cat_name FROM medicines m
+               LEFT JOIN medicine_categories c ON c.id=m.category_id
+               WHERE m.status=1 ORDER BY m.name"""
+        ).fetchall()
+        cats = conn.execute("SELECT id, name FROM medicine_categories ORDER BY name").fetchall()
+    finally:
+        conn.close()
+    return render_template("stock_check.html", meds=meds, cats=cats, today=today_str())
+
+
+# ======================= 经营报表 =======================
+
+@app.route("/reports")
+@login_required
+def reports():
+    view = request.args.get("view", "daily")
+    conn = db.get_conn()
+    try:
+        data = None
+        if view == "daily":
+            d1 = request.args.get("d1", today_str())
+            d2 = request.args.get("d2", today_str())
+            rows = conn.execute(
+                """SELECT bill_date, method, COUNT(*) cnt, IFNULL(SUM(total),0) total,
+                          IFNULL(SUM(paid),0) paid
+                   FROM bills WHERE bill_date BETWEEN ? AND ? AND status!='已退款'
+                   GROUP BY bill_date, method ORDER BY bill_date, method""",
+                (d1, d2),
+            ).fetchall()
+            summary = {
+                "orders": sum(r["cnt"] for r in rows),
+                "total": float(sum(r["total"] for r in rows)),
+                "paid": float(sum(r["paid"] for r in rows)),
+            }
+            recharge = conn.execute(
+                """SELECT IFNULL(SUM(amount),0) s FROM card_recharges
+                   WHERE recharge_date BETWEEN ? AND ?""",
+                (d1, d2),
+            ).fetchone()["s"]
+            data = {"rows": rows, "d1": d1, "d2": d2, "summary": summary,
+                    "recharge": float(recharge or 0)}
+        elif view == "monthly":
+            rows = conn.execute(
+                """SELECT strftime('%Y-%m', bill_date) ym, COUNT(*) cnt,
+                          IFNULL(SUM(total),0) total, IFNULL(SUM(paid),0) paid
+                   FROM bills WHERE status!='已退款'
+                   GROUP BY ym ORDER BY ym DESC LIMIT 12"""
+            ).fetchall()
+            data = {"rows": rows}
+        elif view == "pets":
+            rows = conn.execute(
+                """SELECT p.name pet_name, p.species, o.name owner_name,
+                          COUNT(b.id) cnt, IFNULL(SUM(b.total),0) total
+                   FROM bills b JOIN pets p ON p.id=b.pet_id
+                   JOIN owners o ON o.id=b.owner_id
+                   WHERE b.status!='已退款'
+                   GROUP BY p.id ORDER BY total DESC LIMIT 30"""
+            ).fetchall()
+            data = {"rows": rows}
+        elif view == "employees":
+            rows = conn.execute(
+                """SELECT COALESCE(NULLIF(b.sale_employee_name,''), b.service_employee_name) emp,
+                          COUNT(*) cnt, IFNULL(SUM(b.total),0) total,
+                          IFNULL(SUM(b.total * IFNULL(d.commission_rate,0) / 100.0),0) commission
+                   FROM bills b
+                   LEFT JOIN doctors d ON d.id=COALESCE(b.sale_employee_id, b.service_employee_id)
+                   WHERE b.status!='已退款'
+                   GROUP BY emp ORDER BY total DESC LIMIT 30"""
+            ).fetchall()
+            data = {"rows": rows}
+        elif view == "stock":
+            rows = conn.execute(
+                """SELECT c.name cat_name, COUNT(m.id) cnt,
+                          IFNULL(SUM(m.stock),0) stock,
+                          IFNULL(SUM(m.stock*m.purchase_price),0) cost_value,
+                          SUM(CASE WHEN m.stock<=m.low_stock AND m.status=1 THEN 1 ELSE 0 END) low_cnt
+                   FROM medicines m LEFT JOIN medicine_categories c ON c.id=m.category_id
+                   GROUP BY c.id ORDER BY cost_value DESC"""
+            ).fetchall()
+            data = {"rows": rows}
+    finally:
+        conn.close()
+    return render_template("reports.html", view=view, data=data)
 
 
 # ======================= 启动 =======================
