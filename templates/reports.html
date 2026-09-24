@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block pagetitle %}经营报表{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <a class="btn {{ 'btn-primary' if view=='daily' }}" href="{{ url_for('reports', view='daily') }}">日营业</a>
+  <a class="btn {{ 'btn-primary' if view=='monthly' }}" href="{{ url_for('reports', view='monthly') }}">月趋势</a>
+  <a class="btn {{ 'btn-primary' if view=='pets' }}" href="{{ url_for('reports', view='pets') }}">宠物消费榜</a>
+  <a class="btn {{ 'btn-primary' if view=='employees' }}" href="{{ url_for('reports', view='employees') }}">员工业绩</a>
+  <a class="btn {{ 'btn-primary' if view=='stock' }}" href="{{ url_for('reports', view='stock') }}">库存资产</a>
+</div>
+
+{% if view=='daily' %}
+<div class="card">
+  <form method="get" class="flex" style="gap:12px">
+    <input type="hidden" name="view" value="daily">
+    <label>起始 <input type="date" name="d1" value="{{ data.d1 }}"></label>
+    <label>截止 <input type="date" name="d2" value="{{ data.d2 }}"></label>
+    <button class="btn" type="submit">查询</button>
+  </form>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="num">{{ data.summary.orders }}</div><div>单据数</div></div>
+    <div class="stat-card"><div class="num">¥{{ '%.2f'|format(data.summary.total) }}</div><div>应收合计</div></div>
+    <div class="stat-card"><div class="num">¥{{ '%.2f'|format(data.summary.paid) }}</div><div>实收合计</div></div>
+    <div class="stat-card"><div class="num">¥{{ '%.2f'|format(data.recharge) }}</div><div>会员卡充值</div></div>
+  </div>
+  <table>
+    <thead><tr><th>日期</th><th>支付方式</th><th>单数</th><th>应收</th><th>实收</th></tr></thead>
+    <tbody>
+      {% for r in data.rows %}
+      <tr><td>{{ r.bill_date }}</td><td>{{ r.method }}</td><td>{{ r.cnt }}</td>
+          <td>¥{{ '%.2f'|format(r.total) }}</td><td>¥{{ '%.2f'|format(r.paid) }}</td></tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">该区间暂无单据</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% elif view=='monthly' %}
+<div class="card">
+  <table>
+    <thead><tr><th>月份</th><th>单据数</th><th>应收</th><th>实收</th></tr></thead>
+    <tbody>
+      {% for r in data.rows %}
+      <tr><td><b>{{ r.ym }}</b></td><td>{{ r.cnt }}</td>
+          <td>¥{{ '%.2f'|format(r.total) }}</td><td>¥{{ '%.2f'|format(r.paid) }}</td></tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">暂无数据</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% elif view=='pets' %}
+<div class="card">
+  <table>
+    <thead><tr><th>#</th><th>宠物</th><th>种类</th><th>宠物主</th><th>就诊次数</th><th>累计消费</th></tr></thead>
+    <tbody>
+      {% for r in data.rows %}
+      <tr><td>{{ loop.index }}</td><td><b>{{ r.pet_name }}</b></td><td>{{ r.species or '-' }}</td>
+          <td>{{ r.owner_name }}</td><td>{{ r.cnt }}</td>
+          <td>¥{{ '%.2f'|format(r.total) }}</td></tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">暂无数据</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% elif view=='employees' %}
+<div class="card">
+  <table>
+    <thead><tr><th>员工</th><th>单据数</th><th>业绩金额</th><th>预估提成（按提成率）</th></tr></thead>
+    <tbody>
+      {% for r in data.rows %}
+      <tr><td><b>{{ r.emp or '未指定' }}</b></td><td>{{ r.cnt }}</td>
+          <td>¥{{ '%.2f'|format(r.total) }}</td>
+          <td>¥{{ '%.2f'|format(r.commission) }}</td></tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">暂无数据</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">提成按医生「排班管理」中设置的提成率（%）计算，归属按账单的销售/服务员工。</p>
+</div>
+
+{% elif view=='stock' %}
+<div class="card">
+  <table>
+    <thead><tr><th>分类</th><th>品种数</th><th>总库存</th><th>库存成本（按进价）</th><th>预警品种</th></tr></thead>
+    <tbody>
+      {% for r in data.rows %}
+      <tr><td><b>{{ r.cat_name or '未分类' }}</b></td><td>{{ r.cnt }}</td><td>{{ r.stock }}</td>
+          <td>¥{{ '%.2f'|format(r.cost_value) }}</td>
+          <td>{% if r.low_cnt %}<span class="tag red">{{ r.low_cnt }}</span>{% else %}<span class="tag green">0</span>{% endif %}</td></tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">暂无数据</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
