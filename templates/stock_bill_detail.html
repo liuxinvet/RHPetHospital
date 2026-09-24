@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block pagetitle %}单据详情{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <a class="btn" href="{{ url_for('stock_bills') }}">← 返回列表</a>
+</div>
+
+<div class="card">
+  <table class="kv">
+    <tr><td>单号</td><td><b>{{ bill.bill_no }}</b></td><td>类型</td><td>{{ bill.bill_type }}</td></tr>
+    <tr><td>供应商/来源</td><td>{{ bill.supplier or '-' }}</td><td>金额</td><td>¥{{ '%.2f'|format(bill.total_amount) }}</td></tr>
+    <tr><td>日期</td><td>{{ bill.bill_date }}</td><td>操作人</td><td>{{ bill.operator or '-' }}</td></tr>
+    <tr><td>创建时间</td><td>{{ bill.created_at }}</td><td>备注</td><td>{{ bill.remark or '-' }}</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <table>
+    <thead><tr><th>药品</th><th>规格</th><th>单位</th><th>数量（+入 / -出）</th><th>单价</th><th>金额</th></tr></thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td><b>{{ it.med_name }}</b></td>
+        <td>{{ it.spec or '-' }}</td>
+        <td>{{ it.unit }}</td>
+        <td {% if it.qty<0 %}style="color:#e5484d"{% else %}style="color:#2f9e44"{% endif %}>{{ it.qty }}</td>
+        <td>¥{{ '%.2f'|format(it.price) }}</td>
+        <td>¥{{ '%.2f'|format(it.amount) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">无明细</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
