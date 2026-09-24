@@ -71,14 +71,21 @@ function addBillRow() {
   tr.innerHTML =
     '<td><select name="item_type[]" style="width:110px">' +
     '<option>挂号费</option><option>诊疗费</option><option>药品费</option>' +
-    '<option>检查费</option><option>住院费</option><option>美容费</option><option>其他</option>' +
+    '<option>检查费</option><option>住院费</option><option>寄养费</option><option>美容费</option><option>其他</option>' +
     '</select></td>' +
     '<td><input type="text" name="item_name[]" placeholder="项目名称" style="min-width:160px"></td>' +
     '<td><input type="number" name="qty[]" value="1" min="1" style="width:70px" oninput="calcBillTotal()"></td>' +
     '<td><input type="number" name="price[]" value="0" min="0" step="0.01" style="width:90px" oninput="calcBillTotal()"></td>' +
+    '<td><input type="number" name="member_price[]" value="" min="0" step="0.01" style="width:90px" placeholder="可选" oninput="calcBillTotal()">' +
+    '<label class="chk"><input type="checkbox" name="is_member_price[]" value="1" onchange="applyMemberPrice(this)"> 按会员价</label></td>' +
     '<td class="bill-sub">0.00</td>' +
     '<td><button type="button" class="btn btn-danger btn-xs" onclick="this.closest(\'tr\').remove();calcBillTotal()">删</button></td>';
   tbody.appendChild(tr);
+  calcBillTotal();
+}
+
+function applyMemberPrice(chk) {
+  // 勾选会员价：若填写了会员价则小计按会员价计
   calcBillTotal();
 }
 
@@ -88,6 +95,10 @@ function calcBillTotal() {
   var total = 0;
   Array.prototype.forEach.call(tbody.rows, function (tr) {
     var price = parseFloat(tr.querySelector('input[name="price[]"]').value || 0);
+    var mp = parseFloat(tr.querySelector('input[name="member_price[]"]').value || 0);
+    var chk = tr.querySelector('input[name="is_member_price[]"]');
+    var useMember = chk && chk.checked && mp > 0;
+    if (useMember) price = mp;
     var q = parseInt(tr.querySelector('input[name="qty[]"]').value || 0);
     var sub = price * q;
     tr.querySelector('.bill-sub').textContent = sub.toFixed(2);
@@ -117,11 +128,13 @@ function loadPrescription(presId, urlBase) {
         tr.innerHTML =
           '<td><select name="item_type[]" style="width:110px">' +
           '<option>药品费</option><option>挂号费</option><option>诊疗费</option><option>检查费</option>' +
-          '<option>住院费</option><option>美容费</option><option>其他</option>' +
+          '<option>住院费</option><option>寄养费</option><option>美容费</option><option>其他</option>' +
           '</select></td>' +
           '<td><input type="text" name="item_name[]" value="' + it.name + '" style="min-width:160px"></td>' +
           '<td><input type="number" name="qty[]" value="' + it.qty + '" min="1" style="width:70px" oninput="calcBillTotal()"></td>' +
           '<td><input type="number" name="price[]" value="' + it.price + '" min="0" step="0.01" style="width:90px" oninput="calcBillTotal()"></td>' +
+          '<td><input type="number" name="member_price[]" value="" min="0" step="0.01" style="width:90px" placeholder="可选" oninput="calcBillTotal()">' +
+          '<label class="chk"><input type="checkbox" name="is_member_price[]" value="1" onchange="applyMemberPrice(this)"> 按会员价</label></td>' +
           '<td class="bill-sub">' + it.subtotal.toFixed(2) + '</td>' +
           '<td><button type="button" class="btn btn-danger btn-xs" onclick="this.closest(\'tr\').remove();calcBillTotal()">删</button></td>';
         tbody.appendChild(tr);
