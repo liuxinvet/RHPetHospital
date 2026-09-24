@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block pagetitle %}库存盘点{% endblock %}
+{% block content %}
+
+<div class="card">
+  <form method="post" class="stack">
+    <div class="flex" style="gap:16px">
+      <label>盘点日期 <input type="date" name="check_date" value="{{ today }}" required></label>
+      <label>备注 <input type="text" name="remark" placeholder="如：月度例行盘点"></label>
+    </div>
+    <p class="hint">在下方填写每项药品的<b>实际盘点数量</b>；与账面库存不一致时，系统自动生成「盘点调整」单据并更新库存。</p>
+    <table>
+      <thead><tr><th>药品</th><th>规格</th><th>单位</th><th>账面库存</th><th>实盘数量</th><th>差异</th></tr></thead>
+      <tbody>
+        {% for m in meds %}
+        <tr>
+          <td><b>{{ m.name }}</b></td>
+          <td>{{ m.spec or '-' }}</td>
+          <td>{{ m.unit }}</td>
+          <td>{{ m.stock }}</td>
+          <td>
+            <input type="hidden" name="mid[]" value="{{ m.id }}">
+            <input type="number" name="actual[]" class="real-input" data-stock="{{ m.stock }}" value="{{ m.stock }}" min="0" style="width:90px">
+          </td>
+          <td class="diff">0</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="empty">暂无药品</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">保存盘点结果</button>
+      <a class="btn" href="{{ url_for('stock_bills') }}">返回</a>
+    </div>
+  </form>
+</div>
+
+<script>
+document.querySelectorAll('.real-input').forEach(function(inp){
+  inp.addEventListener('input', function(){
+    var diff = parseInt(this.value || 0) - parseInt(this.dataset.stock || 0);
+    var cell = this.closest('tr').querySelector('.diff');
+    cell.textContent = diff > 0 ? '+' + diff : diff;
+    cell.style.color = diff === 0 ? '#666' : (diff > 0 ? '#2f9e44' : '#e5484d');
+  });
+});
+</script>
+{% endblock %}
