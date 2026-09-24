@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block pagetitle %}库存单据{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <form method="get">
+    <select name="type">
+      <option value="">全部类型</option>
+      {% for t in ['采购入库','其他入库','报损','盘点调整'] %}
+      <option value="{{ t }}" {{ 'selected' if btype==t }}>{{ t }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">筛选</button>
+    {% if btype %}<a class="btn" href="{{ url_for('stock_bills') }}">清除</a>{% endif %}
+  </form>
+  <div>
+    <a class="btn" href="{{ url_for('stock_check') }}">库存盘点</a>
+    <a class="btn btn-primary" href="{{ url_for('stock_bill_new') }}">+ 新建单据</a>
+  </div>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>单号</th><th>类型</th><th>供应商/来源</th><th>金额</th><th>日期</th><th>操作人</th><th>备注</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for b in bills %}
+      <tr>
+        <td><b>{{ b.bill_no }}</b></td>
+        <td>
+          {% if b.bill_type=='采购入库' %}<span class="tag green">{{ b.bill_type }}</span>
+          {% elif b.bill_type=='报损' %}<span class="tag red">{{ b.bill_type }}</span>
+          {% elif b.bill_type=='盘点调整' %}<span class="tag blue">{{ b.bill_type }}</span>
+          {% else %}<span class="tag gray">{{ b.bill_type }}</span>{% endif %}
+        </td>
+        <td>{{ b.supplier or '-' }}</td>
+        <td>¥{{ '%.2f'|format(b.total_amount) }}</td>
+        <td>{{ b.bill_date }}</td>
+        <td>{{ b.operator or '-' }}</td>
+        <td>{{ b.remark or '-' }}</td>
+        <td class="actions">
+          <a class="btn btn-xs" href="{{ url_for('stock_bill_detail', bid=b.id) }}">详情</a>
+          <form method="post" action="{{ url_for('stock_bill_delete', bid=b.id) }}" style="display:inline"
+                onsubmit="return confirmSubmit('删除该单据将回滚库存，确定？')">
+            <button class="btn btn-xs btn-danger">删</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty">暂无单据</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
