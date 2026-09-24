@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block pagetitle %}开卡{% endblock %}
+{% block content %}
+
+<div class="card form-card">
+  <form method="post" class="stack">
+    <label>宠物主 <span class="req">*</span>
+      <select name="owner_id" required>
+        <option value="">请选择宠物主</option>
+        {% for o in owners %}
+        <option value="{{ o.id }}">{{ o.name }}（{{ o.phone or '-' }}）</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>卡类型
+      <select name="card_type" id="card-type">
+        <option value="储值卡">储值卡（充值余额消费）</option>
+        <option value="计次卡">计次卡（按次数消费，如洗澡10次）</option>
+      </select>
+    </label>
+    <label>卡名 <input type="text" name="card_name" placeholder="如：金卡 / 洗澡卡10次"></label>
+    <label>折扣（1 = 无折扣，0.9 = 9折）
+      <input type="number" name="discount" step="0.01" min="0" max="1" value="1">
+    </label>
+    <div id="field-value">
+      <label>初始充值金额（元）
+        <input type="number" name="amount" step="0.01" min="0" value="0">
+      </label>
+    </div>
+    <div id="field-times" style="display:none">
+      <label>初始次数
+        <input type="number" name="times" min="0" value="0">
+      </label>
+    </div>
+    <label>备注 <input type="text" name="remark" placeholder="选填"></label>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">确认开卡</button>
+      <a class="btn" href="{{ url_for('cards') }}">返回</a>
+    </div>
+  </form>
+</div>
+
+<script>
+document.getElementById('card-type').addEventListener('change', function(){
+  var isValue = this.value === '储值卡';
+  document.getElementById('field-value').style.display = isValue ? '' : 'none';
+  document.getElementById('field-times').style.display = isValue ? 'none' : '';
+});
+</script>
+{% endblock %}
