@@ -6,8 +6,70 @@
   <div class="stat blue"><div class="num">{{ stats.appt_today }}</div><div class="label">今日挂号（待诊 {{ stats.pending_appt }}）</div></div>
   <div class="stat green"><div class="num">¥{{ '%.0f'|format(stats.income_today) }}</div><div class="label">今日已收金额</div></div>
   <div class="stat orange"><div class="num">{{ stats.hos_active }}</div><div class="label">住院中</div></div>
+  <div class="stat purple"><div class="num">{{ stats.foster_active }}</div><div class="label">寄养中</div></div>
+  <div class="stat red"><div class="num">{{ stats.rv_today }}</div><div class="label">待回访（今日到期）</div></div>
+  <div class="stat blue"><div class="num">¥{{ '%.0f'|format(stats.pending_money) }}</div><div class="label">未结清挂账</div></div>
+  <div class="stat blue"><div class="num">{{ stats.card_active }}</div><div class="label">正常会员卡（余额 ¥{{ '%.0f'|format(stats.card_balance) }}）</div></div>
+  <div class="stat green"><div class="num">¥{{ '%.0f'|format(stats.stock_cost) }}</div><div class="label">库存资产（按进价）</div></div>
   <div class="stat blue"><div class="num">{{ stats.pet_total }}</div><div class="label">宠物档案总数</div></div>
   <div class="stat green"><div class="num">{{ stats.owner_total }}</div><div class="label">宠物主总数</div></div>
+</div>
+
+<div class="grid-3">
+  <div class="card">
+    <h3>寄养在养（{{ stats.foster_active }}）
+      <a class="btn btn-sm btn-primary" href="{{ url_for('fosters') }}">寄养管理</a>
+    </h3>
+    {% if foster_list %}
+    <table>
+      <thead><tr><th>宠物</th><th>宠物主</th><th>入养日</th><th>日费</th></tr></thead>
+      <tbody>
+        {% for f in foster_list %}
+        <tr>
+          <td>{{ f.pet_name }} <span class="muted">({{ f.species }})</span></td>
+          <td>{{ f.owner_name }}<br><span class="muted">{{ f.owner_phone }}</span></td>
+          <td>{{ f.in_date }}</td>
+          <td>¥{{ '%.0f'|format(f.daily_fee) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">暂无寄养中宠物</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <h3>回访提醒（{{ stats.rv_today }}）
+      <a class="btn btn-sm btn-primary" href="{{ url_for('return_visits') }}">回访管理</a>
+    </h3>
+    {% if rv_list %}
+    <table>
+      <thead><tr><th>宠物</th><th>宠物主</th><th>计划日</th><th>类型</th></tr></thead>
+      <tbody>
+        {% for r in rv_list %}
+        <tr>
+          <td>{{ r.pet_name }}</td>
+          <td>{{ r.owner_name }}<br><span class="muted">{{ r.owner_phone }}</span></td>
+          <td><span class="tag orange">{{ r.plan_date }}</span></td>
+          <td>{{ r.visit_type }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">今日无到期回访</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <h3>今日值班医生</h3>
+    {% if on_duty %}
+    <div class="flex">
+      {% for d in on_duty %}
+      <span class="tag blue">{{ d.name }} · {{ d.title }} · {{ d.specialty }}</span>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">今日未设置值班排班，请到「医生排班」中添加</div>
+    {% endif %}
+  </div>
 </div>
 
 <div class="grid-2">
