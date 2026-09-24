@@ -25,9 +25,37 @@
       </div>
       <div class="form-item">
         <label>收款方式</label>
-        <select name="method">
-          {% for m in ['现金','微信','支付宝','刷卡','挂账'] %}
+        <select name="method" id="pay-method">
+          {% for m in ['现金','微信','支付宝','刷卡','挂账','储值卡'] %}
           <option value="{{ m }}">{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>会员卡（储值卡支付时必选）</label>
+        <select name="card_id" id="card_id">
+          <option value="">-- 不使用会员卡 --</option>
+          {% for c in cards %}
+          <option value="{{ c.id }}" data-balance="{{ c.balance }}">{{ c.card_no }} {{ c.card_name or '' }} {{ c.owner_name }}（余额 ¥{{ '%.2f'|format(c.balance) }}）</option>
+          {% endfor %}
+        </select>
+        <span class="muted" id="card-hint"></span>
+      </div>
+      <div class="form-item">
+        <label>销售员工（开单）</label>
+        <select name="sale_employee_id">
+          <option value="">-- 未指定 --</option>
+          {% for doc in doctors %}
+          <option value="{{ doc.id }}">{{ doc.name }}（{{ doc.title }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-item">
+        <label>服务员工（执行）</label>
+        <select name="service_employee_id">
+          <option value="">-- 未指定 --</option>
+          {% for doc in doctors %}
+          <option value="{{ doc.id }}">{{ doc.name }}（{{ doc.title }}）</option>
           {% endfor %}
         </select>
       </div>
@@ -49,23 +77,26 @@
     <h3 class="section-title">收费明细 <button type="button" class="btn btn-sm" onclick="addBillRow()">+ 添加一行</button></h3>
     <table class="bill-items">
       <thead>
-        <tr><th>类型</th><th>项目名称</th><th>数量</th><th>单价</th><th>小计</th><th></th></tr>
+        <tr><th>类型</th><th>项目名称</th><th>数量</th><th>单价</th><th>会员价</th><th>小计</th><th></th></tr>
       </thead>
       <tbody id="bill-body">
         <tr>
           <td><select name="item_type[]" style="width:110px">
             <option>挂号费</option><option>诊疗费</option><option>药品费</option>
-            <option>检查费</option><option>住院费</option><option>美容费</option><option>其他</option>
+            <option>检查费</option><option>住院费</option><option>寄养费</option><option>美容费</option><option>其他</option>
           </select></td>
           <td><input type="text" name="item_name[]" placeholder="项目名称" style="min-width:160px"></td>
           <td><input type="number" name="qty[]" value="1" min="1" style="width:70px" oninput="calcBillTotal()"></td>
           <td><input type="number" name="price[]" value="0" min="0" step="0.01" style="width:90px" oninput="calcBillTotal()"></td>
+          <td><input type="number" name="member_price[]" value="" min="0" step="0.01" style="width:90px" placeholder="可选"
+                     oninput="calcBillTotal()">
+              <label class="chk"><input type="checkbox" name="is_member_price[]" value="1" onchange="applyMemberPrice(this)"> 按会员价</label></td>
           <td class="bill-sub">0.00</td>
           <td><button type="button" class="btn btn-danger btn-xs" onclick="this.closest('tr').remove();calcBillTotal()">删</button></td>
         </tr>
       </tbody>
       <tfoot>
-        <tr><td colspan="4" style="text-align:right"><b>合计：</b></td><td><b id="bill-total">0.00</b></td><td></td></tr>
+        <tr><td colspan="5" style="text-align:right"><b>合计：</b></td><td><b id="bill-total">0.00</b></td><td></td></tr>
       </tfoot>
     </table>
 
@@ -76,6 +107,24 @@
   </form>
 </div>
 <script>
+  // 会员卡联动：选择储值卡支付时提示余额
+  var payMethod = document.getElementById('pay-method');
+  var cardSel = document.getElementById('card_id');
+  var cardHint = document.getElementById('card-hint');
+  function updateCardHint(){
+    if (payMethod.value === '储值卡') {
+      if (!cardSel.value) {
+        cardHint.textContent = '请选择一张储值卡';
+      } else {
+        var bal = parseFloat(cardSel.selectedOptions[0].dataset.balance || 0);
+        cardHint.textContent = '卡余额 ¥' + bal.toFixed(2) + '，将全额扣款并增加积分';
+      }
+    } else {
+      cardHint.textContent = '';
+    }
+  }
+  payMethod.addEventListener('change', updateCardHint);
+  cardSel.addEventListener('change', updateCardHint);
   // 宠物选择联动宠物主
   document.getElementById('pet_id').addEventListener('change', function () {
     var opt = this.options[this.selectedIndex];
