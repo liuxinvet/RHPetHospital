@@ -34,17 +34,209 @@ def hash_pwd(password):
 
 
 def init_db():
-    """初始化数据库：建表 + 种子数据"""
+    """初始化数据库：建表 + 种子数据 + 增量迁移"""
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
         schema = f.read()
     conn = get_conn()
     try:
         conn.executescript(schema)
+        migrate(conn)
         conn.commit()
         _seed(conn)
     finally:
         conn.close()
+
+
+# ============ 增量迁移：老库自动补列/建表 ============
+
+_MIGRATIONS = {
+    "appointments": [
+        ("time_type", "TEXT DEFAULT '上午'"),
+        ("remark", "TEXT DEFAULT ''"),
+    ],
+    "medical_records": [
+        ("temperature", "REAL DEFAULT 0"),
+        ("weight", "REAL DEFAULT 0"),
+        ("breathe", "INTEGER DEFAULT 0"),
+        ("heartrate", "INTEGER DEFAULT 0"),
+        ("tongkong", "TEXT DEFAULT ''"),
+        ("blood_pressure", "TEXT DEFAULT ''"),
+        ("chiefnote", "TEXT DEFAULT ''"),
+        ("checknote", "TEXT DEFAULT ''"),
+        ("carenote", "TEXT DEFAULT ''"),
+        ("processnote", "TEXT DEFAULT ''"),
+        ("physicalorder", "TEXT DEFAULT ''"),
+        ("conditionnote", "TEXT DEFAULT ''"),
+        ("visitrecord", "TEXT DEFAULT ''"),
+        ("surgical_record", "TEXT DEFAULT ''"),
+        ("hospitalnode", "TEXT DEFAULT ''"),
+        ("feeding_method", "TEXT DEFAULT ''"),
+        ("feeding_frequency", "TEXT DEFAULT ''"),
+        ("food_changes", "TEXT DEFAULT ''"),
+        ("is_vaccine", "TEXT DEFAULT ''"),
+        ("is_deworming", "TEXT DEFAULT ''"),
+        ("previous_medical", "TEXT DEFAULT ''"),
+        ("mentality", "TEXT DEFAULT ''"),
+        ("physical_condition_score", "INTEGER DEFAULT 0"),
+        ("muscle_score", "INTEGER DEFAULT 0"),
+        ("periodontal_score", "INTEGER DEFAULT 0"),
+        ("eyes", "TEXT DEFAULT ''"),
+        ("nose", "TEXT DEFAULT ''"),
+        ("ears", "TEXT DEFAULT ''"),
+        ("oral_cavity", "TEXT DEFAULT ''"),
+        ("muscle", "TEXT DEFAULT ''"),
+        ("skins", "TEXT DEFAULT ''"),
+        ("nerve", "TEXT DEFAULT ''"),
+        ("urology", "TEXT DEFAULT ''"),
+        ("heart_lung", "TEXT DEFAULT ''"),
+        ("abdomen", "TEXT DEFAULT ''"),
+        ("lymph_gland", "TEXT DEFAULT ''"),
+        ("skin_elasticity", "TEXT DEFAULT ''"),
+        ("eye_condition", "TEXT DEFAULT ''"),
+        ("oral_mucosa", "TEXT DEFAULT ''"),
+        ("crt", "TEXT DEFAULT ''"),
+        ("suspected_illness", "TEXT DEFAULT ''"),
+        ("again_visit_num", "INTEGER DEFAULT 0"),
+        ("open_appointment", "INTEGER DEFAULT 0"),
+        ("appointment_time", "TEXT DEFAULT ''"),
+    ],
+    "bills": [
+        ("sale_employee_id", "INTEGER REFERENCES doctors(id)"),
+        ("sale_employee_name", "TEXT DEFAULT ''"),
+        ("service_employee_id", "INTEGER REFERENCES doctors(id)"),
+        ("service_employee_name", "TEXT DEFAULT ''"),
+    ],
+    "bill_items": [
+        ("is_member_price", "INTEGER DEFAULT 0"),
+    ],
+    "doctors": [
+        ("commission_rate", "REAL DEFAULT 0"),
+    ],
+}
+
+_NEW_TABLES = {
+    "foster_records": """
+        CREATE TABLE IF NOT EXISTS foster_records (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          foster_no TEXT UNIQUE NOT NULL,
+          pet_id INTEGER NOT NULL REFERENCES pets(id),
+          owner_id INTEGER NOT NULL REFERENCES owners(id),
+          in_date TEXT NOT NULL,
+          out_date TEXT DEFAULT '',
+          daily_fee REAL DEFAULT 0,
+          deposit REAL DEFAULT 0,
+          total_fee REAL DEFAULT 0,
+          reason TEXT DEFAULT '',
+          status TEXT DEFAULT '寄养中',
+          remark TEXT DEFAULT '',
+          created_at TEXT DEFAULT (datetime('now','localtime'))
+        )""",
+    "return_visits": """
+        CREATE TABLE IF NOT EXISTS return_visits (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          pet_id INTEGER NOT NULL REFERENCES pets(id),
+          owner_id INTEGER NOT NULL REFERENCES owners(id),
+          record_id INTEGER REFERENCES medical_records(id),
+          plan_date TEXT NOT NULL,
+          actual_date TEXT DEFAULT '',
+          visit_type TEXT DEFAULT '电话',
+          visit_result TEXT DEFAULT '',
+          status TEXT DEFAULT '待回访',
+          main_employee_id INTEGER REFERENCES doctors(id),
+          diagnosis TEXT DEFAULT '',
+          remark TEXT DEFAULT '',
+          created_at TEXT DEFAULT (datetime('now','localtime'))
+        )""",
+    "member_cards": """
+        CREATE TABLE IF NOT EXISTS member_cards (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          card_no TEXT UNIQUE NOT NULL,
+          owner_id INTEGER NOT NULL REFERENCES owners(id),
+          card_type TEXT DEFAULT '储值卡',
+          card_name TEXT DEFAULT '',
+          balance REAL DEFAULT 0,
+          times_left INTEGER DEFAULT 0,
+          discount REAL DEFAULT 1,
+          points INTEGER DEFAULT 0,
+          total_recharge REAL DEFAULT 0,
+          total_consume REAL DEFAULT 0,
+          status TEXT DEFAULT '正常',
+          remark TEXT DEFAULT '',
+          created_at TEXT DEFAULT (datetime('now','localtime'))
+        )""",
+    "card_recharges": """
+        CREATE TABLE IF NOT EXISTS card_recharges (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          card_id INTEGER NOT NULL REFERENCES member_cards(id),
+          amount REAL DEFAULT 0,
+          method TEXT DEFAULT '现金',
+          operator TEXT DEFAULT '',
+          recharge_date TEXT DEFAULT (date('now','localtime')),
+          remark TEXT DEFAULT '',
+          created_at TEXT DEFAULT (datetime('now','localtime'))
+        )""",
+    "card_consumes": """
+        CREATE TABLE IF NOT EXISTS card_consumes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          card_id INTEGER NOT NULL REFERENCES member_cards(id),
+          bill_id INTEGER REFERENCES bills(id),
+          kind TEXT DEFAULT '储值扣款',
+          amount REAL DEFAULT 0,
+          times INTEGER DEFAULT 0,
+          points INTEGER DEFAULT 0,
+          consume_date TEXT DEFAULT (date('now','localtime')),
+          remark TEXT DEFAULT '',
+          created_at TEXT DEFAULT (datetime('now','localtime'))
+        )""",
+    "stock_bills": """
+        CREATE TABLE IF NOT EXISTS stock_bills (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          bill_no TEXT UNIQUE NOT NULL,
+          bill_type TEXT DEFAULT '采购入库',
+          supplier TEXT DEFAULT '',
+          total_amount REAL DEFAULT 0,
+          bill_date TEXT DEFAULT (date('now','localtime')),
+          operator TEXT DEFAULT '',
+          remark TEXT DEFAULT '',
+          created_at TEXT DEFAULT (datetime('now','localtime'))
+        )""",
+    "stock_bill_items": """
+        CREATE TABLE IF NOT EXISTS stock_bill_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          bill_id INTEGER NOT NULL REFERENCES stock_bills(id),
+          medicine_id INTEGER NOT NULL REFERENCES medicines(id),
+          qty INTEGER DEFAULT 0,
+          price REAL DEFAULT 0,
+          amount REAL DEFAULT 0
+        )""",
+}
+
+
+def migrate(conn):
+    """对已存在的旧库执行增量迁移：补列 + 建新表，全程幂等"""
+    # 1) 补列
+    for table, cols in _MIGRATIONS.items():
+        existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        for col, decl in cols:
+            if col not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+    # 2) 建新表
+    for name, ddl in _NEW_TABLES.items():
+        conn.execute(ddl)
+    # 3) 补索引
+    for idx, ddl in {
+        "idx_foster_pet": "CREATE INDEX IF NOT EXISTS idx_foster_pet ON foster_records(pet_id)",
+        "idx_foster_status": "CREATE INDEX IF NOT EXISTS idx_foster_status ON foster_records(status)",
+        "idx_rv_plan": "CREATE INDEX IF NOT EXISTS idx_rv_plan ON return_visits(plan_date)",
+        "idx_rv_status": "CREATE INDEX IF NOT EXISTS idx_rv_status ON return_visits(status)",
+        "idx_cards_owner": "CREATE INDEX IF NOT EXISTS idx_cards_owner ON member_cards(owner_id)",
+        "idx_card_recharge_card": "CREATE INDEX IF NOT EXISTS idx_card_recharge_card ON card_recharges(card_id)",
+        "idx_card_consume_card": "CREATE INDEX IF NOT EXISTS idx_card_consume_card ON card_consumes(card_id)",
+        "idx_stock_bill_date": "CREATE INDEX IF NOT EXISTS idx_stock_bill_date ON stock_bills(bill_date)",
+        "idx_stock_items_bill": "CREATE INDEX IF NOT EXISTS idx_stock_bill_items ON stock_bill_items(bill_id)",
+    }.items():
+        conn.execute(ddl)
 
 
 def _seed(conn):
